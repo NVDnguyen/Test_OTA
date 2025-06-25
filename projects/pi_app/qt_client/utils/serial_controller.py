@@ -83,5 +83,3 @@ class SerialWriterThread(QThread):
 
     def stop(self):
         self.running = False
-
-# This file has been renamed to serial_controller.py. Please update your imports accordingly.

@@ -15,6 +15,12 @@ class AuthScreen(QWidget):
     guest_login_attempt = pyqtSignal()
     register_attempt = pyqtSignal(str, str)
 
+    login_success = pyqtSignal(str, str, str)  # identity, role, message
+    login_failure = pyqtSignal(str)
+    logout_success = pyqtSignal()
+    api_error = pyqtSignal(str)
+    token_refresh_needed = pyqtSignal()
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.init_ui()
@@ -178,8 +184,27 @@ class AuthScreen(QWidget):
     def show_register(self):
         self.stacked_widget.setCurrentWidget(self.register_widget)
 
+    def handle_login_success(self, identity, role, message):
+        self.login_success.emit(identity, role, message)
+        self.clear_inputs()
+        self.set_default_screen()
+
+    def handle_login_failure(self, error_message):
+        self.login_failure.emit(error_message)
+
+    def handle_logout_success(self):
+        self.logout_success.emit()
+        self.set_default_screen()
+
+    def handle_api_error(self, error_message):
+        self.api_error.emit(error_message)
+
+    def handle_token_refresh_needed(self):
+        self.token_refresh_needed.emit()
+
     def set_default_screen(self):
-        self.show_card_login()
+        self.stacked_widget.setCurrentWidget(self.card_login_widget)
+        self.clear_inputs()
 
     def clear_inputs(self):
         """Clears all text input fields."""
@@ -188,3 +213,7 @@ class AuthScreen(QWidget):
         self.login_password_input.clear()
         self.register_email_input.clear()
         self.register_password_input.clear()
+
+    def guest_login(self):
+        # Simulate guest login success immediately
+        self.handle_login_success("guest", "guest", "Logged in as guest.")

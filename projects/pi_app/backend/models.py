@@ -18,6 +18,9 @@ class ProductBase(BaseModel):
     product_img_url: Optional[str] = Field(
         default=None, description="URL for the product's image."
     )
+    barcode: Optional[str] = Field(
+        default=None, description="Barcode for the product (EAN/UPC/other)."
+    )
 
 
 # Model for creating a new product. 'quantity' is the initial stock.
@@ -43,6 +46,7 @@ class ProductUpdate(BaseModel):
     quantity: Optional[int] = Field(default=None, ge=0)
     unit: Optional[str] = None
     product_img_url: Optional[str] = None
+    barcode: Optional[str] = None
 
 
 # --- User and Auth Models ---

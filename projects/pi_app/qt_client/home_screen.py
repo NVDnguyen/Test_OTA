@@ -1,8 +1,9 @@
 # home_screen.py
 # Defines the UI for the home screen.
 
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QTextEdit
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QTextEdit, QHBoxLayout, QLineEdit
 from PyQt5.QtCore import Qt
+from qt_client.utils.serial_controller import SerialWriterThread
 
 def create_home_screen_widget():
     """Creates and returns the home screen widget, its 'View Cart' button, and the serial output text area."""
@@ -27,6 +28,35 @@ def create_home_screen_widget():
     serial_output_area.setReadOnly(True)
     serial_output_area.setPlaceholderText("Serial output will appear here...")
     layout.addWidget(serial_output_area, 1) # Give it some stretch factor
+
+    # --- Serial send controls ---
+    serial_send_layout = QHBoxLayout()
+    serial_input = QLineEdit()
+    serial_input.setPlaceholderText("Enter message to send to serial port...")
+    serial_send_button = QPushButton("Send to Serial")
+    serial_send_layout.addWidget(serial_input)
+    serial_send_layout.addWidget(serial_send_button)
+    layout.addLayout(serial_send_layout)
+
+    # --- Serial writer thread setup ---
+    # You may want to adjust port/baudrate as needed
+    serial_writer = SerialWriterThread(port="/dev/ttyUSB0", baudrate=9600)
+    serial_writer.start()
+
+    def handle_write_success(msg):
+        serial_output_area.append(f"[WRITE SUCCESS] {msg}")
+    def handle_write_error(msg):
+        serial_output_area.append(f"[WRITE ERROR] {msg}")
+
+    serial_writer.write_success.connect(handle_write_success)
+    serial_writer.error_occurred.connect(handle_write_error)
+
+    def send_serial_message():
+        msg = serial_input.text()
+        if msg:
+            serial_writer.send(msg)
+            serial_input.clear()
+    serial_send_button.clicked.connect(send_serial_message)
 
     layout.addStretch()
 
