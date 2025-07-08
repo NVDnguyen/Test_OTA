@@ -13,8 +13,8 @@ class Settings(BaseSettings):
     APP_ENV: Literal["development", "production"] = "development"
 
     # --- Database & Cache ---
-    MONGO_URI: str = "mongodb://localhost:27017/shopping_cart_db"
-    REDIS_URI: str = "redis://localhost:6379/0"
+    MONGO_URI: str = "mongodb://mongo:27017/shopping_cart_db"
+    REDIS_URI: str = "redis://redis:6379/0"
 
     # --- Security ---
     JWT_SECRET_KEY: str = "super-secret-key-for-dev"
