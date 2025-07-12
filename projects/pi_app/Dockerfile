@@ -10,7 +10,7 @@ ENV PYTHONUNBUFFERED 1
 WORKDIR /app
 
 # Copy the requirements file into the container
-COPY ./requirements.txt .
+COPY .backend/requirements.txt .
 
 # Install any needed packages specified in requirements.txt
 RUN --mount=type=cache,target=/root/.cache/pip pip install -r requirements.txt
