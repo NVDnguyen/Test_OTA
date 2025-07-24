@@ -15,7 +15,10 @@ class QRPaymentDialog(QDialog):
         self.api_client = api_client
         self.setWindowTitle("Complete Your Payment")
         self.setModal(True)
-        self.setFixedSize(400, 550)
+        # Responsive: Use minimum size, allow resizing, and scale content
+        self.setMinimumSize(320, 420)
+        self.resize(360, 520)
+        self.setSizeGripEnabled(True)
 
         # Timer for polling the payment status
         self.polling_timer = QTimer(self)
@@ -27,25 +30,28 @@ class QRPaymentDialog(QDialog):
 
     def init_ui(self):
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(20, 20, 20, 20)
-        main_layout.setSpacing(15)
+        main_layout.setContentsMargins(10, 10, 10, 10)  # Reduced margins for small screens
+        main_layout.setSpacing(10)
         main_layout.setAlignment(Qt.AlignCenter)
 
         title_label = QLabel("Scan to Pay")
         title_label.setObjectName("title_label")
         title_label.setAlignment(Qt.AlignCenter)
+        title_label.setStyleSheet("font-size: 18px; font-weight: bold; margin-bottom: 4px;")
         main_layout.addWidget(title_label)
 
         # QR Code Display
         self.qr_label = QLabel()
         self.qr_label.setAlignment(Qt.AlignCenter)
-        self.qr_label.setFixedSize(300, 300)
+        self.qr_label.setMinimumSize(180, 180)
+        self.qr_label.setMaximumSize(260, 260)
+        self.qr_label.setStyleSheet("background: #fff; border: 1px solid #eee; border-radius: 12px;")
         self.display_qr_svg(self.qr_svg_string)
         main_layout.addWidget(self.qr_label)
 
         self.status_label = QLabel("Waiting for payment confirmation...")
         self.status_label.setAlignment(Qt.AlignCenter)
-        self.status_label.setStyleSheet("font-weight: bold; color: #3498db;")
+        self.status_label.setStyleSheet("font-size: 15px; font-weight: bold; color: #3498db; margin-top: 6px;")
         main_layout.addWidget(self.status_label)
 
         main_layout.addStretch()
@@ -54,9 +60,16 @@ class QRPaymentDialog(QDialog):
         mock_payment_widget = QWidget()
         mock_layout = QVBoxLayout(mock_payment_widget)
         mock_layout.setContentsMargins(0,0,0,0)
-        mock_layout.addWidget(QLabel("Test", alignment=Qt.AlignCenter))
+        mock_layout.setSpacing(4)
+        test_label = QLabel("Test", alignment=Qt.AlignCenter)
+        test_label.setStyleSheet("font-size: 12px; color: #888;")
+        mock_layout.addWidget(test_label)
         self.mock_confirm_button = QPushButton("Simulate Payment Success")
         self.mock_confirm_button.setObjectName("checkout_button")
+        self.mock_confirm_button.setMinimumHeight(40)
+        self.mock_confirm_button.setStyleSheet(
+            "font-size: 15px; border-radius: 8px; border: 1px solid #bbb; background: #eaf6ea; padding: 6px;"
+        )
         self.mock_confirm_button.clicked.connect(self._on_mock_confirm_clicked) # Kept for testing
         mock_layout.addWidget(self.mock_confirm_button)
         main_layout.addWidget(mock_payment_widget)
@@ -65,7 +78,14 @@ class QRPaymentDialog(QDialog):
         # QPixmap can load SVG directly from bytes
         pixmap = QPixmap()
         pixmap.loadFromData(svg_string.encode('utf-8'), "SVG")
+        # Responsive: scale to label size
         self.qr_label.setPixmap(pixmap.scaled(self.qr_label.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation))
+
+    def resizeEvent(self, event):
+        # Ensure QR code scales with dialog
+        if hasattr(self, 'qr_label') and hasattr(self, 'qr_svg_string'):
+            self.display_qr_svg(self.qr_svg_string)
+        super().resizeEvent(event)
 
     def update_status(self, status_text: str, style_color: str = "#3498db"):
         self.status_label.setText(status_text)

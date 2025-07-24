@@ -1,0 +1,9 @@
+pyserial
+pyjwt
+pyqt5
+pyqtgraph
+Pillow
+numpy
+pyzbar
+python-dotenv
+opencv-python

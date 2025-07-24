@@ -65,3 +65,12 @@ class ProductWidget(QFrame):
         layout.addLayout(quantity_layout, 2)
         layout.addWidget(self.price_label, 2, alignment=Qt.AlignCenter)
         layout.addWidget(self.total_label, 2, alignment=Qt.AlignRight)
+
+    def update_product_info(self, product_info):
+        """Update the widget's display to reflect new product info."""
+        self.product_info = product_info
+        self.name_label.setText(product_info['name'])
+        self.subtitle_label.setText(product_info['subtitle'])
+        self.quantity_label.setText(str(product_info['quantity']))
+        self.price_label.setText(f"£{product_info['price']:.2f}")
+        self.total_label.setText(f"£{product_info['price'] * product_info['quantity']:.2f}")
