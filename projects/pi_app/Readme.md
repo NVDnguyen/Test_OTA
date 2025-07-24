@@ -15,11 +15,6 @@ This will use the `docker-compose.yml` and `Dockerfile` in the project root to b
 
 ### 2. Run Backend Manually
 
-#### Install requirements library
-- `source .venv/bin/activate`
-- `pip install -r requirements.txt`
-- `brew install zbar`
-
 Alternatively, you can run the backend directly with Python:
 
 ```fish
@@ -41,6 +36,11 @@ python -m backend.app
 - Edit `backend/config.py` or set environment variables in a `.env` file in the backend directory.
 
 ### 3. Run QT Client App
+
+#### Install requirements library
+- `source .venv/bin/activate`
+- `pip install -r requirements.txt`
+- `brew install zbar`
 
 To start the QT client application:
 
