@@ -3,6 +3,9 @@
 import requests
 import jwt # PyJWT
 from PyQt5.QtCore import QObject, pyqtSignal, QTimer
+import logging
+
+logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(levelname)s: %(message)s')
 
 class ApiClient(QObject):
     # Signals for communication with the main application
@@ -11,6 +14,7 @@ class ApiClient(QObject):
     logout_success = pyqtSignal()
     api_error = pyqtSignal(str) # general API error message
     token_refresh_needed = pyqtSignal() # Signal to trigger refresh
+    tokens_set = pyqtSignal(str, str)  # identity, role
 
     def __init__(self, base_url, parent=None):
         super().__init__(parent)
@@ -25,6 +29,7 @@ class ApiClient(QObject):
         self.token_refresh_timer.timeout.connect(self._refresh_access_token_internal)
 
     def _set_tokens(self, access_token, refresh_token):
+        logging.info(f"Setting tokens. Access: {'set' if access_token else 'cleared'}, Refresh: {'set' if refresh_token else 'cleared'}.")
         self.access_token = access_token
         self.refresh_token = refresh_token
         
@@ -35,6 +40,7 @@ class ApiClient(QObject):
             decoded_token = jwt.decode(self.access_token, options={"verify_signature": False})
             self.current_user_identity = decoded_token.get("sub")
             self.current_user_role = decoded_token.get("role")
+            self.tokens_set.emit(self.current_user_identity, self.current_user_role)
             
             # Start refresh timer (e.g., 1 minute before access token expires)
             # This assumes access tokens expire in 15 minutes (900 seconds)
@@ -46,7 +52,7 @@ class ApiClient(QObject):
             self.token_refresh_timer.stop()
 
     def _request(self, method, endpoint, json_data=None, headers=None, timeout=5, retry_on_refresh=True):
-        """Internal helper for making authenticated requests."""
+        logging.info(f"API request: {method} {endpoint} (retry_on_refresh={retry_on_refresh})")
         full_url = f"{self.base_url}{endpoint}"
         
         if headers is None:
@@ -80,19 +86,24 @@ class ApiClient(QObject):
 
     # Public API methods
     def get(self, endpoint, headers=None, timeout=5, retry_on_refresh=True):
+        logging.info(f"GET {endpoint}")
         return self._request("GET", endpoint, headers=headers, timeout=timeout, retry_on_refresh=retry_on_refresh)
 
     def post(self, endpoint, json_data=None, headers=None, timeout=5, retry_on_refresh=True):
+        logging.info(f"POST {endpoint}")
         return self._request("POST", endpoint, json_data=json_data, headers=headers, timeout=timeout, retry_on_refresh=retry_on_refresh)
 
     def put(self, endpoint, json_data=None, headers=None, timeout=5, retry_on_refresh=True):
+        logging.info(f"PUT {endpoint}")
         return self._request("PUT", endpoint, json_data=json_data, headers=headers, timeout=timeout, retry_on_refresh=retry_on_refresh)
 
     def delete(self, endpoint, headers=None, timeout=5, retry_on_refresh=True):
+        logging.info(f"DELETE {endpoint}")
         return self._request("DELETE", endpoint, headers=headers, timeout=timeout, retry_on_refresh=retry_on_refresh)
 
     # Authentication methods
     def login(self, email, password):
+        logging.info(f"Attempting login for {email}")
         try:
             response = requests.post(f"{self.base_url}/api/auth/login", json={"email": email, "password": password}, timeout=5)
             response.raise_for_status()
@@ -103,6 +114,7 @@ class ApiClient(QObject):
             self.login_failure.emit(f"Login failed: {e}")
 
     def register(self, email, password):
+        logging.info(f"Attempting registration for {email}")
         try:
             response = requests.post(f"{self.base_url}/api/auth/register", json={"email": email, "password": password}, timeout=5)
             response.raise_for_status()
@@ -111,6 +123,7 @@ class ApiClient(QObject):
             self.login_failure.emit(f"Registration failed: {e}")
 
     def card_login(self, card_id):
+        logging.info(f"Attempting card login for card_id: {card_id}")
         try:
             response = requests.post(f"{self.base_url}/api/auth/card_login", json={"card_id": card_id}, timeout=5)
             response.raise_for_status()
@@ -121,6 +134,7 @@ class ApiClient(QObject):
             self.login_failure.emit(f"Card login failed: {e}")
 
     def guest_login(self):
+        logging.info("Attempting guest login")
         """Logs in as a temporary guest user."""
         try:
             response = requests.post(f"{self.base_url}/api/auth/guest_login", timeout=5)
@@ -132,6 +146,7 @@ class ApiClient(QObject):
             self.login_failure.emit(f"Guest login failed: {e}")
 
     def _refresh_access_token_internal(self):
+        logging.info("Refreshing access token")
         """Internal method to refresh access token. Returns True on success, False otherwise."""
         if not self.refresh_token:
             return False
@@ -147,6 +162,7 @@ class ApiClient(QObject):
             return False
 
     def logout(self):
+        logging.info("Logging out user")
         """Clears tokens and logs out the user."""
         self._set_tokens(None, None)
         self.logout_success.emit()

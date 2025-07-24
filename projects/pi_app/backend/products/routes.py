@@ -63,6 +63,17 @@ async def get_product(
         return product
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
 
+@router.get('/barcode/{barcode}', response_model=Product)
+async def get_product_by_barcode(
+    barcode: str,
+    products_collection: collection.Collection = Depends(get_products_collection),
+):
+    """Retrieves a single product by its barcode."""
+    product = products_collection.find_one({"barcode": barcode}, {'_id': 0})
+    if product:
+        return product
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found by barcode")
+
 @router.put('/{product_id}', response_model=Product)
 async def update_product(
     product_id: int,

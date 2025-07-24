@@ -1,13 +1,40 @@
 # qt_client/screens/map_screen.py
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QLineEdit, QListWidget, QLabel, QHBoxLayout, QMessageBox, QGraphicsView, QGraphicsScene, QGraphicsPixmapItem, QFrame, QHBoxLayout
+    QWidget, QVBoxLayout, QLineEdit, QListWidget, QLabel, QHBoxLayout, QMessageBox, QGraphicsView, QGraphicsScene, QGraphicsPixmapItem, QFrame, QHBoxLayout, QPushButton
 )
 from PyQt5.QtGui import QPixmap, QPainter, QPen, QTransform
-from PyQt5.QtCore import Qt, QPointF
+from PyQt5.QtCore import Qt, QPoint, QTimer,QProcess,QProcessEnvironment
+
 import requests
+import subprocess
+import os
+class VirtualKeyboardLineEdit(QLineEdit):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.keyboard_process = None
+
+    def focusInEvent(self, event):
+        super().focusInEvent(event)
+        if self.keyboard_process is None or self.keyboard_process.state() == QProcess.NotRunning:
+            try:
+                self.keyboard_process = QProcess()
+                # print(QProcessEnvironment.systemEnvironment().toStringList())
+                self.keyboard_process.setProcessEnvironment(QProcessEnvironment.systemEnvironment())
+                # Start matchbox-keyboard at the bottom of the screen
+                self.keyboard_process.start("onboard", )
+            except Exception as e:
+                print(e)
+
+    def focusOutEvent(self, event):
+        super().focusOutEvent(event)
+        # Hide/close the keyboard when focus is lost
+        if self.keyboard_process is not None and self.keyboard_process.state() == QProcess.Running:
+            self.keyboard_process.terminate()
+            self.keyboard_process.waitForFinished(1000)
+            self.keyboard_process = None
 
 class MapScreen(QWidget):
-    def __init__(self, api_base_url):
+    def __init__(self, api_base_url, return_home_callback=None):
         super().__init__()
         self.api_base_url = api_base_url
         self.selected_product = None
@@ -17,6 +44,7 @@ class MapScreen(QWidget):
         self.map_pixmap = None  # Store loaded map pixmap
         self.zoom_level = 1.0
         self.entrance_point = {"x": 20, "y": 20}  # Example entrance coordinates
+        self.return_home_callback = return_home_callback  # Callback for home button
         self.init_ui()
 
     def init_ui(self):
@@ -38,39 +66,67 @@ class MapScreen(QWidget):
 
         # Floating search bar container (child widget, not top-level)
         self.floating_bar = QWidget(self.graphics_view.viewport())
-        self.floating_bar.setStyleSheet("background: rgba(255,255,255,0.95); border-radius: 12px; border: 1.5px solid #b0b8c1;")
-        self.floating_bar.setFixedWidth(420)
+        self.floating_bar.setStyleSheet(
+            "background: rgba(255,255,255,0.98); border-radius: 12px; border: 1.5px solid #b0b8c1;"
+        )
+        self.floating_bar.setMinimumWidth(0)
+        self.floating_bar.setMaximumWidth(420)
         floating_layout = QVBoxLayout(self.floating_bar)
-        floating_layout.setContentsMargins(18, 12, 18, 12)
-        floating_layout.setSpacing(8)
+        floating_layout.setContentsMargins(8, 8, 8, 8)
+        floating_layout.setSpacing(6)
+        
+        # Row for search bar and home button
+        search_row = QHBoxLayout()
+        search_row.setSpacing(6)
 
-        # Title
-        title = QLabel("Product Map Search")
-        title.setAlignment(Qt.AlignLeft)
-        title.setStyleSheet("font-size: 20px; font-weight: bold; margin-bottom: 2px;")
-        floating_layout.addWidget(title)
+        # Home button
+        self.home_button = QPushButton("🏠")
+        self.home_button.setMinimumSize(48,48)
+        self.home_button.setMaximumSize(56,56)
+        self.home_button.setStyleSheet(
+            "font-size: 26px; border-radius: 12px; border: 2px solid #bbb; background: #f5f6fa; padding: 0px; min-width:48px; min-height:48px; max-width:56px; max-height:56px;"
+        )
+        self.home_button.clicked.connect(self.on_home_clicked)
+        search_row.addWidget(self.home_button)
 
         # Search bar
-        self.search_bar = QLineEdit()
+        self.search_bar = VirtualKeyboardLineEdit()
         self.search_bar.setPlaceholderText("🔍 Search for a product...")
-        self.search_bar.setStyleSheet("padding: 8px; font-size: 16px; border-radius: 8px; border: 1px solid #bbb;")
+        self.search_bar.setMinimumHeight(48)
+        self.search_bar.setStyleSheet(
+            "padding: 10px; font-size: 20px; border-radius: 10px; border: 2px solid #bbb; min-height:48px;"
+        )
         self.search_bar.textChanged.connect(self.on_search_text_changed)
-        floating_layout.addWidget(self.search_bar)
+        search_row.addWidget(self.search_bar)
 
-        # Suggestions list
-        self.suggestions_list = QListWidget()
-        self.suggestions_list.setStyleSheet("font-size: 15px; border-radius: 6px; border: 1px solid #ddd; background: #fafbfc;")
+        # Add search row to floating layout
+        floating_layout.addLayout(search_row)
+
+        # Suggestions list (top-level, not stealing focus)
+        self.suggestions_list = QListWidget(None)
+        self.suggestions_list.setWindowFlags(Qt.ToolTip)
+        self.suggestions_list.setFocusPolicy(Qt.NoFocus)
+        self.suggestions_list.setStyleSheet(
+            "font-size: 18px; border-radius: 8px; border: 2px solid #ddd; background: #fafbfc; min-width: 120px; min-height: 40px;"
+        )
         self.suggestions_list.itemClicked.connect(self.on_suggestion_clicked)
-        self.suggestions_list.setMaximumHeight(120)
-        floating_layout.addWidget(self.suggestions_list)
+        self.suggestions_list.setMaximumHeight(180)
+        self.suggestions_list.hide()
 
-        self.floating_bar.move(30, 30)
+        self.floating_bar.move(10, 10)
         self.floating_bar.raise_()
-        self.floating_bar.show()  # <-- Add this line
+        self.floating_bar.show()
 
         self.load_map_image()
-        self.marker_radius = 12  # For click detection
+        self.marker_radius = 24  # Even larger for touch
         self.last_marker_clicked = None
+
+        # Animation timer for marker bouncing effect
+        self.animation_timer = QTimer(self)
+        self.animation_timer.timeout.connect(self.update_marker_animation)
+        self.animation_phase = 0
+        self.animation_timer.start(80)  # ~12.5 FPS
+
     def load_map_image(self):
         try:
             resp = requests.get(f"{self.api_base_url}/api/map/map_image")
@@ -100,6 +156,7 @@ class MapScreen(QWidget):
     def on_search_text_changed(self, text):
         if not text:
             self.suggestions_list.clear()
+            self.suggestions_list.hide()
             self.product_locations = []
             self.product_details = None
             self.show_empty_map()
@@ -111,16 +168,36 @@ class MapScreen(QWidget):
                 self.suggestions_list.clear()
                 if suggestions:
                     self.suggestions_list.addItems(suggestions)
+                    self.position_suggestions_list()
+                    self.suggestions_list.show()
+                    self.search_bar.setFocus()
                 else:
-                    self.suggestions_list.addItem("No results found.")
+                    self.suggestions_list.hide()
             else:
                 self.suggestions_list.clear()
                 self.suggestions_list.addItem(f"Error: {resp.status_code} {resp.reason}")
+                self.position_suggestions_list()
+                self.suggestions_list.show()
+                self.search_bar.setFocus()
         except Exception as e:
             self.suggestions_list.clear()
             self.suggestions_list.addItem(f"Error: {str(e)}")
+            self.position_suggestions_list()
+            self.suggestions_list.show()
+            self.search_bar.setFocus()
+
+    def position_suggestions_list(self):
+        # Position the suggestions list globally under the search bar
+        search_bar_geom = self.search_bar.geometry()
+        global_pos = self.search_bar.mapToGlobal(QPoint(0, search_bar_geom.height()))
+        width = search_bar_geom.width()
+        row_height = self.suggestions_list.sizeHintForRow(0) or 24
+        visible_count = min(self.suggestions_list.count(), 6)
+        height = row_height * visible_count + 4
+        self.suggestions_list.setGeometry(global_pos.x(), global_pos.y(), width, height)
 
     def on_suggestion_clicked(self, item):
+        self.suggestions_list.hide()  # Hide after selection
         product_name = item.text()
         self.selected_product = product_name
         try:
@@ -130,7 +207,7 @@ class MapScreen(QWidget):
                 self.product_details = product
                 self.product_locations = product.get("location", [])
                 self.update_map_with_locations()
-                self.show_product_details_popup(product)
+                # self.show_product_details_popup(product)
         except Exception as e:
             pass
 
@@ -141,30 +218,44 @@ class MapScreen(QWidget):
         details += f"Quantity: {product.get('quantity', '')}\n"
         QMessageBox.information(self, "Product Details", details)
 
+    def update_marker_animation(self):
+        self.animation_phase = (self.animation_phase + 1) % 24  # 24 frames per loop
+        self.update_map_with_locations()
+
     def update_map_with_locations(self):
         if self.map_pixmap is None or not self.product_locations:
             return
         pixmap = self.map_pixmap.copy()
         painter = QPainter(pixmap)
-        pen = QPen(Qt.red)
-        pen.setWidth(10)
-        painter.setPen(pen)
-        # Draw product locations
-        for loc in self.product_locations:
+        for idx, loc in enumerate(self.product_locations):
             x = loc.get("x", 0)
             y = loc.get("y", 0)
-            painter.drawPoint(x, y)
-        # Draw path from entrance to the first product location
-        if self.product_locations:
-            pen_path = QPen(Qt.blue)
-            pen_path.setWidth(4)
-            painter.setPen(pen_path)
-            entrance_x = self.entrance_point["x"]
-            entrance_y = self.entrance_point["y"]
-            for loc in self.product_locations:
-                x = loc.get("x", 0)
-                y = loc.get("y", 0)
-                painter.drawLine(entrance_x, entrance_y, x, y)
+            marker_radius = self.marker_radius
+            # Animation: bounce up and down
+            bounce = int(6 * abs((self.animation_phase/12.0)-1))  # Smooth up/down
+            pin_height = marker_radius * 2
+            pin_width = marker_radius
+            pin_center_x = int(x)
+            pin_bottom_y = int(y) - bounce
+            pin_top_y = pin_bottom_y - pin_height
+            # Draw the pin body (ellipse/circle at top)
+            pen = QPen(Qt.black)
+            pen.setWidth(3)
+            painter.setPen(pen)
+            painter.setBrush(Qt.red)
+            painter.drawEllipse(pin_center_x - pin_width//2, pin_top_y, pin_width, pin_width)
+            # Draw the pin tail (triangle)
+            painter.setBrush(Qt.red)
+            points = [
+                QPoint(pin_center_x, pin_bottom_y),
+                QPoint(pin_center_x - pin_width//2, pin_top_y + pin_width//2),
+                QPoint(pin_center_x + pin_width//2, pin_top_y + pin_width//2)
+            ]
+            painter.drawPolygon(*points)
+            # Draw white center circle
+            painter.setBrush(Qt.white)
+            painter.setPen(QPen(Qt.white))
+            painter.drawEllipse(pin_center_x - pin_width//4, pin_top_y + pin_width//4, pin_width//2, pin_width//2)
         painter.end()
         self.scene.clear()
         self.pixmap_item = QGraphicsPixmapItem(pixmap)
@@ -184,6 +275,10 @@ class MapScreen(QWidget):
                 if clicked is not None:
                     self.show_marker_popup(clicked)
                     return True
+        if hasattr(self, "floating_bar"):
+            self.floating_bar.move(30, 30)
+            if self.suggestions_list.isVisible():
+                self.position_suggestions_list()
         return super().eventFilter(source, event)
 
     def check_marker_click(self, scene_pos):
@@ -210,7 +305,24 @@ class MapScreen(QWidget):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        self.floating_bar.move(30, 30)
+        # Move floating bar to always be visible, with margin
+        margin = 10
+        self.floating_bar.move(margin, margin)
+        # Make floating bar width responsive
+        parent_width = self.graphics_view.viewport().width()
+        max_width = min(420, parent_width - 2*margin)
+        self.floating_bar.setFixedWidth(max_width)
+        if self.suggestions_list.isVisible():
+            self.position_suggestions_list()
+
+    def on_home_clicked(self):
+        if self.return_home_callback:
+            self.return_home_callback()
+        else:
+            self.close()  # fallback: close this screen
+
+    def set_api_base_url(self, api_base_url):
+        self.api_base_url = api_base_url
 
     # def showEvent(self, event):
     #     super().showEvent(event)
