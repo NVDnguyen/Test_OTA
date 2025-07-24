@@ -37,6 +37,11 @@ python -m backend.app
 
 ### 3. Chạy ứng dụng QT Client
 
+#### Cài các gói cần thiết
+- `source .venv/bin/activate`
+- `pip install -r requirements.txst`
+- `brew install zbar`
+
 Để khởi động ứng dụng QT client, sử dụng lệnh sau:
 
 ```fish
