@@ -1,5 +1,3 @@
-# widgets/product_widget.py
-
 from PyQt5.QtWidgets import (QWidget, QHBoxLayout, QVBoxLayout, QLabel, 
                              QPushButton, QFrame)
 from PyQt5.QtGui import QPixmap, QColor

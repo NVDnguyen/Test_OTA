@@ -1,0 +1,16 @@
+[project]
+name = "qt-client"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=2.0.2",
+    "opencv-python>=4.11.0.86",
+    "pydantic-settings>=2.10.1",
+    "pyjwt>=2.10.1",
+    "pyqt5>=5.15.11",
+    "pyserial>=3.5",
+    "pyzbar>=0.1.9",
+    "requests>=2.32.4",
+]

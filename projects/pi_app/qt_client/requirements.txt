@@ -1,0 +1,9 @@
+PyQt5
+requests
+pyzbar
+opencv-python
+PyJWT
+numpy
+serial
+pydantic-settings
+pyserial
