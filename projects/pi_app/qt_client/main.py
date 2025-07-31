@@ -15,7 +15,7 @@ from PyQt5.QtCore import pyqtSlot, Qt, QTimer
 
 # Import the UI definition and stylesheet
 from utils.api_client import ApiClient
-from utils.serial_controller import SerialReaderThread, SerialWriterThread
+from utils.serial_controller import SerialWriterThread , SerialReaderThread
 from config.settings import settings
 from config.stylesheet import STYLESHEET
 from screens.home_screen import HomeScreen
