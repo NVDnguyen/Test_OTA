@@ -1,15 +1,20 @@
 # qt_client/screens/map_screen.py
+import sys
+import numpy as np
+import pyqtgraph as pg
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QLineEdit, QListWidget, QLabel, QHBoxLayout, 
-    QMessageBox, QGraphicsView, QGraphicsScene, QGraphicsPixmapItem, 
-    QPushButton
+    QMessageBox, QPushButton
 )
-from PyQt5.QtGui import QPixmap, QPainter, QPen, QColor, QBrush, QPainterPath
-from PyQt5.QtCore import Qt, QPointF, QPoint, QTimer, QProcess, QProcessEnvironment
-
+from PyQt5.QtCore import Qt, QPoint, QTimer, QProcess, QProcessEnvironment
+from PyQt5.QtGui import QColor
+from PIL import Image
 import requests
 from utils.serial_reader import UWBSerialReader
-import numpy as np
+import time
+import io 
+
+Image.MAX_IMAGE_PIXELS = None
 
 class VirtualKeyboardLineEdit(QLineEdit):
     def __init__(self, *args, **kwargs):
@@ -21,16 +26,13 @@ class VirtualKeyboardLineEdit(QLineEdit):
         if self.keyboard_process is None or self.keyboard_process.state() == QProcess.NotRunning:
             try:
                 self.keyboard_process = QProcess()
-                # print(QProcessEnvironment.systemEnvironment().toStringList())
                 self.keyboard_process.setProcessEnvironment(QProcessEnvironment.systemEnvironment())
-                # Start matchbox-keyboard at the bottom of the screen
-                self.keyboard_process.start("onboard", )
+                self.keyboard_process.start("onboard")
             except Exception as e:
                 print(e)
 
     def focusOutEvent(self, event):
         super().focusOutEvent(event)
-        # Hide/close the keyboard when focus is lost
         if self.keyboard_process is not None and self.keyboard_process.state() == QProcess.Running:
             self.keyboard_process.terminate()
             self.keyboard_process.waitForFinished(1000)
@@ -42,43 +44,38 @@ class MapScreen(QWidget):
         self.api_base_url = api_base_url
         self.return_home_callback = return_home_callback
         
-        # Initial
-        self.selected_product = None
-        self.product_details = None
-        self.product_locations = []
-        self.map_pixmap = None
-        self.marker_radius = 24
-        self.animation_phase = 0
-        
         # tracking atribute
-        self.tracking_mode = False
         self.uwb_reader = None
         self.position_history = []
-        self.current_position = None
-        self.tag_item = None
-        self.trail_item = None
-        self.tag_text = None
+        self.trail_history = []
+        self.target = None
+        self.fps_time = time.time()
+        self.tracking_mode = False  #mode
+        
         self.init_ui()
+        
+        # Timer 
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.update_plot)
+        self.timer.start(10)  # ~100 FPS
 
     def init_ui(self):
         # Main layout
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
-        self.setLayout(main_layout) 
+        self.setLayout(main_layout)
 
-        # graphics view
-        self.scene = QGraphicsScene()
-        self.graphics_view = QGraphicsView(self.scene)
-        self.graphics_view.setDragMode(QGraphicsView.ScrollHandDrag)
-        self.graphics_view.setTransformationAnchor(QGraphicsView.AnchorUnderMouse)
-        self.graphics_view.viewport().installEventFilter(self)
-        self.graphics_view.viewport().setMouseTracking(True)
-        self.graphics_view.setStyleSheet("background: #fff;")
-        main_layout.addWidget(self.graphics_view)
+        # PlotWidget
+        self.plot_widget = pg.PlotWidget()
+        self.plot_widget.setBackground('w')
+        main_layout.addWidget(self.plot_widget)
+
+        # Load image
+        self.load_map_image()
 
         # Floating search bar
-        self.floating_bar = QWidget(self.graphics_view.viewport())
+        self.floating_bar = QWidget(self)
         self.floating_bar.setStyleSheet(
             "background: rgba(255,255,255,0.98); border-radius: 12px; border: 1.5px solid #b0b8c1;"
         )
@@ -114,7 +111,7 @@ class MapScreen(QWidget):
         self.search_bar.textChanged.connect(self.on_search_text_changed)
         search_row.addWidget(self.search_bar)
 
-        # add Tracking Mode
+        # Tracking Mode button
         self.tracking_button = QPushButton("Tracking Mode")
         self.tracking_button.setMinimumSize(150, 48)
         self.tracking_button.setStyleSheet(
@@ -138,56 +135,171 @@ class MapScreen(QWidget):
         self.suggestions_list.setMaximumHeight(180)
         self.suggestions_list.hide()
 
+        # floating
         self.floating_bar.move(10, 10)
         self.floating_bar.raise_()
         self.floating_bar.show()
 
-        # Load map image
-        self.load_map_image()
-
-        # Animation timer
-        self.animation_timer = QTimer(self)
-        self.animation_timer.timeout.connect(self.update_marker_animation)
-        self.animation_timer.start(80)  # ~12.5 FPS
-
-        # Tracking timer
-        self.tracking_timer = QTimer(self)
-        self.tracking_timer.timeout.connect(self.update_tracking_position)
-
     def load_map_image(self):
         try:
+            #v backend img
             resp = requests.get(f"{self.api_base_url}/api/map/map_image")
             if resp.ok:
                 image_bytes = resp.content
-                pixmap = QPixmap()
-                pixmap.loadFromData(image_bytes)
-                self.scene.clear()
-                self.pixmap_item = QGraphicsPixmapItem(pixmap)
-                self.scene.addItem(self.pixmap_item)
-                self.pixmap_item.setZValue(-1000)  # Ensure map image is at the lowest z-index
-                self.map_pixmap = pixmap  # Store the pixmap for later drawing
-                self.map_image_url = None  # Not a URL anymore
-        except Exception as e:
-            pass
+                
+                # img process
+                img = Image.open(io.BytesIO(image_bytes))
+                arr = np.array(img)
+                arr = np.rot90(arr, k=3) 
 
-    def show_empty_map(self):
-        """Show the map image with no product locations."""
-        if not self.map_image_url:
-            self.load_map_image()
+                # ImageItem
+                self.bg = pg.ImageItem(arr)
+                self.bg.setZValue(-200)  # back filter 
+                self.bg.setRect(0, 0, 1600, 1300)
+                self.plot_widget.addItem(self.bg)
+
+                # limit 
+                self.plot_widget.setXRange(0, 1600)
+                self.plot_widget.setYRange(0, 1300)
+                self.plot_widget.setLimits(
+                    xMin=0, xMax=1600,
+                    yMin=0, yMax=1300
+                )
+                
+                # UI
+                self.target_scatter = self.plot_widget.plot(
+                    [], [], pen=None, symbol='x', symbolSize=20,
+                    symbolBrush='g'
+                )
+                self.path_curve = self.plot_widget.plot(
+                    [], [], pen=pg.mkPen('r', width=4)
+                )
+                self.fpt_scatter = self.plot_widget.plot(
+                    [], [], pen=None,
+                    symbol='o', symbolSize=40,
+                    symbolBrush=pg.mkBrush(QColor(0, 255, 255, 200))
+                )
+                self.trail_curve = self.plot_widget.plot(
+                    [], [], pen=pg.mkPen(QColor(0, 255, 255, 150), width=1)
+                )
+                self.fpt_text = pg.TextItem(
+                    text="SCI", color='r',
+                    anchor=(0.5, -1.0)
+                )
+                self.plot_widget.addItem(self.fpt_text)
+                
+                # hide 
+                self.fpt_scatter.hide()
+                self.trail_curve.hide()
+                self.fpt_text.hide()
+                
+                # Click
+                self.plot_widget.scene().sigMouseClicked.connect(self.on_click)
+        except Exception as e:
+            print(f"Error loading map image: {e}")
+
+    def on_click(self, ev):
+        """Click to show shortest path"""
+        pos = ev.scenePos()
+        vb = self.plot_widget.getViewBox()
+        mp = vb.mapSceneToView(pos)
+        x, y = mp.x(), mp.y()
+        if 0 <= x <= 1300 and 0 <= y <= 1600:
+            self.target = np.array([x, y])
+            self.target_scatter.setData([x], [y])
+            self.path_curve.setData([], [])
+
+    def toggle_tracking_mode(self):
+        if self.tracking_button.text() == "Tracking Mode":
+            self.start_tracking()
+            self.tracking_button.setText("Stop Tracking")
         else:
-            pixmap = QPixmap(self.map_image_url)
-            self.scene.clear()
-            self.pixmap_item = QGraphicsPixmapItem(pixmap)
-            self.scene.addItem(self.pixmap_item)
+            self.stop_tracking()
+            self.tracking_button.setText("Tracking Mode")
+    
+    def start_tracking(self):
+        """tracking mode"""
+        if self.uwb_reader is None:
+            self.uwb_reader = UWBSerialReader(port='/dev/ttyACM0', baudrate=115200)
+        
+        if not self.uwb_reader.start_reading():
+            QMessageBox.warning(self, "Connection Error", "Could not connect to UWB device.")
+            self.tracking_button.setText("Tracking Mode")
+            return
+        
+        # Show
+        self.fpt_scatter.show()
+        self.trail_curve.show()
+        self.fpt_text.show()
+        
+        # reset history cor
+        self.position_history = []
+        self.trail_history = []
+        
+        self.tracking_mode = True
+
+    def stop_tracking(self):
+        """Dừng chế độ tracking"""
+        if self.uwb_reader:
+            self.uwb_reader.stop_reading()
+        
+        # hide
+        self.fpt_scatter.hide()
+        self.trail_curve.hide()
+        self.fpt_text.hide()
+        
+        self.tracking_mode = False
+
+    def update_plot(self):
+        """Cập nhật vị trí tag"""
+        if not self.tracking_mode or not self.uwb_reader or not self.uwb_reader.is_reading:
+            return
+        
+        raw_data = self.uwb_reader.get_latest_data()
+        if not raw_data:
+            return
+        
+        # process raw
+        pos = self.uwb_reader.process_data(raw_data)
+        if pos is None:
+            return
+        
+        # Median filter
+        self.position_history.append(pos)
+        if len(self.position_history) > 100:
+            self.position_history.pop(0)
+        filtered = np.median(np.array(self.position_history), axis=0)
+        x, y = filtered[0], filtered[1]
+        
+        # draw TAG
+        self.fpt_scatter.setData([x], [y])
+        self.fpt_text.setPos(x, y)
+        
+        # draw trail
+        self.trail_history.append(filtered)
+        if len(self.trail_history) > 200:
+            self.trail_history.pop(0)
+        trail = np.array(self.trail_history)
+        self.trail_curve.setData(trail[:,0], trail[:,1])
+        
+        # Vdraw shortest path
+        if self.target is not None:
+            lx = [x, self.target[0]]
+            ly = [y, self.target[1]]
+            self.path_curve.setData(lx, ly)
+        
+        # FPS
+        now = time.time()
+        fps = 1.0 / (now - self.fps_time)
+        self.fps_time = now
+        self.setWindowTitle(f"UWB Tracking (FPS: {fps:.1f})")
 
     def on_search_text_changed(self, text):
         if not text:
             self.suggestions_list.clear()
             self.suggestions_list.hide()
-            self.product_locations = []
-            self.product_details = None
-            self.show_empty_map()
             return
+        
         try:
             resp = requests.get(f"{self.api_base_url}/api/map/search", params={"q": text})
             if resp.ok:
@@ -234,7 +346,6 @@ class MapScreen(QWidget):
                 self.product_details = product
                 self.product_locations = product.get("location", [])
                 self.update_map_with_locations()
-                # self.show_product_details_popup(product)
         except Exception as e:
             pass
 
@@ -245,201 +356,38 @@ class MapScreen(QWidget):
         details += f"Quantity: {product.get('quantity', '')}\n"
         QMessageBox.information(self, "Product Details", details)
 
-    def update_marker_animation(self):
-        self.animation_phase = (self.animation_phase + 1) % 24  # 24 frames per loop
-        self.update_map_with_locations()
-
     def update_map_with_locations(self):
-        if self.map_pixmap is None or not self.product_locations:
-            return
-        pixmap = self.map_pixmap.copy()
-        painter = QPainter(pixmap)
-        for idx, loc in enumerate(self.product_locations):
-            x = loc.get("x", 0)
-            y = loc.get("y", 0)
-            marker_radius = self.marker_radius
-            # Animation: bounce up and down
-            bounce = int(6 * abs((self.animation_phase/12.0)-1))  # Smooth up/down
-            pin_height = marker_radius * 2
-            pin_width = marker_radius
-            pin_center_x = int(x)
-            pin_bottom_y = int(y) - bounce
-            pin_top_y = pin_bottom_y - pin_height
-            # Draw the pin body (ellipse/circle at top)
-            pen = QPen(Qt.black)
-            pen.setWidth(3)
-            painter.setPen(pen)
-            painter.setBrush(Qt.red)
-            painter.drawEllipse(pin_center_x - pin_width//2, pin_top_y, pin_width, pin_width)
-            # Draw the pin tail (triangle)
-            painter.setBrush(Qt.red)
-            points = [
-                QPoint(pin_center_x, pin_bottom_y),
-                QPoint(pin_center_x - pin_width//2, pin_top_y + pin_width//2),
-                QPoint(pin_center_x + pin_width//2, pin_top_y + pin_width//2)
-            ]
-            painter.drawPolygon(*points)
-            # Draw white center circle
-            painter.setBrush(Qt.white)
-            painter.setPen(QPen(Qt.white))
-            painter.drawEllipse(pin_center_x - pin_width//4, pin_top_y + pin_width//4, pin_width//2, pin_width//2)
-        painter.end()
-        self.scene.clear()
-        self.pixmap_item = QGraphicsPixmapItem(pixmap)
-        self.scene.addItem(self.pixmap_item)
-
-    # switch mode
-    def toggle_tracking_mode(self):
-        self.tracking_mode = not self.tracking_mode
-        if self.tracking_mode:
-            self.tracking_button.setText("Normal Mode")
-            self.start_tracking()
-        else:
-            self.tracking_button.setText("Tracking Mode")
-            self.stop_tracking()
-    
-    # tracking update
-    def start_tracking(self):
-        # Delete marker
-        self.scene.clear()
-        self.pixmap_item = QGraphicsPixmapItem(self.map_pixmap)
-        self.scene.addItem(self.pixmap_item)
-        
-        # initial 
-        if self.uwb_reader is None:
-            self.uwb_reader = UWBSerialReader()
-        if not self.uwb_reader.start_reading():
-            QMessageBox.warning(self, "Connection Error", "Could not connect to UWB device.")
-            self.tracking_mode = False
-            self.tracking_button.setText("Tracking Mode")
-            return
-        
-        # Object
-        self.tag_item = self.scene.addEllipse(0, 0, 40, 40, 
-                                            QPen(QColor(0, 0, 0, 0)), 
-                                            QBrush(QColor(0, 255, 255, 200)))
-        self.tag_item.setZValue(1000)  # Hiển thị trên cùng
-        
-        # self.trail_item = self.scene.addPath(QPainterPath(), 
-        #                                    QPen(QColor(0, 255, 255, 150), 
-        #                                    QBrush(QColor(0, 0, 0, 0)))
-        # self.trail_item.setZValue(500)
-        
-        self.tag_text = self.scene.addText("TAG")
-        self.tag_text.setDefaultTextColor(QColor(255, 255, 255))
-        font = self.tag_text.font()
-        font.setPointSize(16)
-        font.setBold(True)
-        self.tag_text.setFont(font)
-        self.tag_text.setZValue(1000)
-        
-        # Timer
-        self.tracking_timer.start(50)  # 20 FPS
-    # stop tracking
-    def stop_tracking(self):
-        if self.tracking_timer.isActive():
-            self.tracking_timer.stop()
-        if self.uwb_reader:
-            self.uwb_reader.stop_reading()
-        
-        # Delete object tracking
-        if self.tag_item:
-            self.scene.removeItem(self.tag_item)
-            self.tag_item = None
-        if self.trail_item:
-            self.scene.removeItem(self.trail_item)
-            self.trail_item = None
-        if self.tag_text:
-            self.scene.removeItem(self.tag_text)
-            self.tag_text = None
-        
-        # return normal map
-        self.scene.clear()
-        self.pixmap_item = QGraphicsPixmapItem(self.map_pixmap)
-        self.scene.addItem(self.pixmap_item)
-    # RTLS
-    def update_tracking_position(self):
-        # get latest data
-        raw_data = self.uwb_reader.get_latest_data()
-        if raw_data is None:
-            return
-        
-        pos = self.uwb_reader.process_data(raw_data)
-        if pos is None:
-            return
-        
-        self.current_position = pos
-        x, y = pos[0], pos[1]
-        
-        # tag update
-        self.tag_item.setRect(x-20, y-20, 40, 40)
-        
-        # text update
-        self.tag_text.setPos(x - 20, y - 50)
-        
-        # update path
-        self.position_history.append(QPointF(x, y))
-        if len(self.position_history) > 100:
-            self.position_history.pop(0)
-        
-        path = QPainterPath()
-        if len(self.position_history) > 0:
-            path.moveTo(self.position_history[0])
-            for p in self.position_history[1:]:
-                path.lineTo(p)
-        
-        # self.trail_item.setPath(path)
-
-    def eventFilter(self, source, event):
-        if source is self.graphics_view.viewport():
-            if event.type() == event.Wheel:
-                angle = event.angleDelta().y()
-                factor = 1.25 if angle > 0 else 0.8
-                self.graphics_view.scale(factor, factor)
-                return True
-            elif event.type() == event.MouseButtonPress:
-                pos = event.pos()
-                scene_pos = self.graphics_view.mapToScene(pos)
-                clicked = self.check_marker_click(scene_pos)
-                if clicked is not None:
-                    self.show_marker_popup(clicked)
-                    return True
-        if hasattr(self, "floating_bar"):
-            self.floating_bar.move(30, 30)
-            if self.suggestions_list.isVisible():
-                self.position_suggestions_list()
-        return super().eventFilter(source, event)
-
-    def check_marker_click(self, scene_pos):
-        # Returns the index of the marker clicked, or None
+        # tick point
         if not self.product_locations:
-            return None
-        for idx, loc in enumerate(self.product_locations):
+            return
+        
+        # delete old point
+        if hasattr(self, 'product_markers'):
+            for marker in self.product_markers:
+                self.plot_widget.removeItem(marker)
+        
+        self.product_markers = []
+        
+        # new tick point
+        for loc in self.product_locations:
             x = loc.get("x", 0)
             y = loc.get("y", 0)
-            dist = ((scene_pos.x() - x) ** 2 + (scene_pos.y() - y) ** 2) ** 0.5
-            if dist <= self.marker_radius:
-                return idx
-        return None
-
-    def show_marker_popup(self, idx):
-        loc = self.product_locations[idx]
-        details = f"Location: ({loc.get('x', '')}, {loc.get('y', '')})\n"
-        if self.product_details:
-            details += f"Name: {self.product_details.get('name', '')}\n"
-            details += f"Subtitle: {self.product_details.get('subtitle', '')}\n"
-            details += f"Price: {self.product_details.get('price', '')} {self.product_details.get('unit', '')}\n"
-            details += f"Quantity: {self.product_details.get('quantity', '')}\n"
-        QMessageBox.information(self, "Product Location Details", details)
+            
+            # marker
+            marker = pg.ScatterPlotItem([x], [y], size=20, symbol='s', 
+                                        brush=pg.mkBrush(QColor(255, 0, 0, 200)),
+                                        pen=pg.mkPen(QColor(0, 0, 0)))
+            self.plot_widget.addItem(marker)
+            self.product_markers.append(marker)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        # Move floating bar to always be visible, with margin
+        # floating bar
         margin = 10
         self.floating_bar.move(margin, margin)
-        # Make floating bar width responsive
-        parent_width = self.graphics_view.viewport().width()
-        max_width = min(420, parent_width - 2*margin)
+        # resize width
+        parent_width = self.width()
+        max_width = min(420, parent_width - 2 * margin)
         self.floating_bar.setFixedWidth(max_width)
         if self.suggestions_list.isVisible():
             self.position_suggestions_list()
@@ -448,7 +396,7 @@ class MapScreen(QWidget):
         if self.return_home_callback:
             self.return_home_callback()
         else:
-            self.close()  # fallback: close this screen
+            self.close()
 
     def set_api_base_url(self, api_base_url):
         self.api_base_url = api_base_url
@@ -456,13 +404,3 @@ class MapScreen(QWidget):
     def closeEvent(self, event):
         self.stop_tracking()
         super().closeEvent(event)
-
-    # def showEvent(self, event):
-    #     super().showEvent(event)
-    #     if hasattr(self, 'floating_bar'):
-    #         self.floating_bar.show()
-
-    # def hideEvent(self, event):
-    #     super().hideEvent(eventaa)
-    #     if hasattr(self, 'floating_bar'):
-    #         self.floating_bar.hide()

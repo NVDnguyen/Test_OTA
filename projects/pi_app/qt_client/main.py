@@ -104,23 +104,23 @@ class ShoppingCartApp(QMainWindow):
         self.update_totals() # Update totals after cart is populated
         
         # --- Setup and Start Serial Threads ---
-        self.serial_thread = SerialReaderThread(
-            port=settings.SERIAL_PORT,
-            baudrate=settings.SERIAL_BAUDRATE
-        )
-        self.serial_thread.new_data_received.connect(self.append_serial_output)
-        self.serial_thread.error_occurred.connect(self.append_serial_output) # Also display errors
-        self.serial_thread.finished_signal.connect(self.on_serial_thread_finished)
-        self.serial_thread.start()
+        # self.serial_thread = SerialReaderThread(
+        #     port=settings.SERIAL_PORT,
+        #     baudrate=settings.SERIAL_BAUDRATE
+        # )
+        # self.serial_thread.new_data_received.connect(self.append_serial_output)
+        # self.serial_thread.error_occurred.connect(self.append_serial_output) # Also display errors
+        # self.serial_thread.finished_signal.connect(self.on_serial_thread_finished)
+        # self.serial_thread.start()
 
-        self.serial_writer = SerialWriterThread(
-            port=settings.SERIAL_PORT,
-            baudrate=settings.SERIAL_BAUDRATE
-        )
-        self.serial_writer.write_success.connect(lambda msg: self.append_serial_output(f"[WRITE SUCCESS] {msg}\n"))
-        self.serial_writer.error_occurred.connect(lambda msg: self.append_serial_output(f"[WRITE ERROR] {msg}\n"))
-        self.serial_writer.start()
-        self.home_screen.send_serial_message.connect(self.serial_writer.send)
+        # self.serial_writer = SerialWriterThread(
+        #     port=settings.SERIAL_PORT,
+        #     baudrate=settings.SERIAL_BAUDRATE
+        # )
+        # self.serial_writer.write_success.connect(lambda msg: self.append_serial_output(f"[WRITE SUCCESS] {msg}\n"))
+        # self.serial_writer.error_occurred.connect(lambda msg: self.append_serial_output(f"[WRITE ERROR] {msg}\n"))
+        # self.serial_writer.start()
+        # self.home_screen.send_serial_message.connect(self.serial_writer.send)
 
         # Start on login screen initially
         self.show_login_screen() # Always start at login
