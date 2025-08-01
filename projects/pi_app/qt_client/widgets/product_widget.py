@@ -50,10 +50,10 @@ class ProductWidget(QFrame):
         quantity_layout.addWidget(self.plus_button)
         
         # Price and Total
-        self.price_label = QLabel(f"£{self.product_info['price']:.2f}")
+        currency = self.product_info.get('currency', 'VND')
+        self.price_label = QLabel(f"{self.product_info['price']:.2f} {currency}")
         self.price_label.setAlignment(Qt.AlignCenter)
-        
-        self.total_label = QLabel(f"£{self.product_info['price'] * self.product_info['quantity']:.2f}")
+        self.total_label = QLabel(f"{self.product_info['price'] * self.product_info['quantity']:.2f} {currency}")
         self.total_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
 
         # Add all widgets to the main layout
@@ -70,5 +70,6 @@ class ProductWidget(QFrame):
         self.name_label.setText(product_info['name'])
         self.subtitle_label.setText(product_info['subtitle'])
         self.quantity_label.setText(str(product_info['quantity']))
-        self.price_label.setText(f"£{product_info['price']:.2f}")
-        self.total_label.setText(f"£{product_info['price'] * product_info['quantity']:.2f}")
+        currency = product_info.get('currency', 'VND')
+        self.price_label.setText(f"{product_info['price']:.2f} {currency}")
+        self.total_label.setText(f"{product_info['price'] * product_info['quantity']:.2f} {currency}")

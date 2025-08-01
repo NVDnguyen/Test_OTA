@@ -5,17 +5,15 @@ from PyQt5.QtWidgets import (QWidget, QHBoxLayout, QVBoxLayout, QGridLayout, QLa
                              QSizePolicy, QScrollArea)
 from PyQt5.QtCore import Qt, pyqtSignal
 from widgets.product_widget import ProductWidget
-
 class CartScreen(QWidget):
     """
     A QWidget representing the entire cart screen, including product list and order summary.
     """
-    barcode_scanned = pyqtSignal(str)  # Signal to emit barcode string
-    # Signals for cart actions
     quantity_changed = pyqtSignal(int, int)  # product_id, change
     product_removed = pyqtSignal(int)        # product_id
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, currency="VND"):
         super().__init__(parent)
+        self.currency = currency
         # Remove products_in_cart from CartScreen state
         self.init_ui()
 
@@ -39,7 +37,7 @@ class CartScreen(QWidget):
         self.summary_scroll.setWidgetResizable(True)
         self.summary_scroll.setWidget(self.summary_panel)
         self.main_layout.addWidget(self.summary_scroll, 3)
-
+        self._add_barcode_input()
     def _create_cart_panel(self):
         """Creates the left panel for the shopping cart items."""
         panel = QWidget()
@@ -129,21 +127,11 @@ class CartScreen(QWidget):
         self.summary_items_header_label = QLabel("ITEMS 0")
         self.summary_items_header_label.setStyleSheet("font-size: 13px;")
         subtotal_layout.addWidget(self.summary_items_header_label)
-        self.subtotal_label = QLabel("£0.00")
+        self.subtotal_label = QLabel(f"{self.currency} 0.00")
         self.subtotal_label.setAlignment(Qt.AlignRight)
         self.subtotal_label.setStyleSheet("font-size: 13px;")
         subtotal_layout.addWidget(self.subtotal_label)
         layout.addLayout(subtotal_layout)
-
-        # Shipping
-        shipping_label = QLabel("SHIPPING")
-        shipping_label.setStyleSheet("font-size: 12px;")
-        layout.addWidget(shipping_label)
-        self.shipping_combo = QComboBox()
-        self.shipping_combo.setStyleSheet("font-size: 13px; min-height: 36px;")
-        self.shipping_combo.addItem("Standard Delivery - £5.00", 5.00)
-        self.shipping_combo.addItem("Express Delivery - £15.00", 15.00)
-        layout.addWidget(self.shipping_combo)
 
         # Promo Code
         promo_label = QLabel("PROMO CODE")
@@ -167,7 +155,7 @@ class CartScreen(QWidget):
         total_label = QLabel("TOTAL COST")
         total_label.setStyleSheet("font-size: 13px;")
         total_layout.addWidget(total_label)
-        self.total_cost_label = QLabel("£0.00")
+        self.total_cost_label = QLabel(f"{self.currency} 0.00")
         self.total_cost_label.setObjectName("total_cost_label")
         self.total_cost_label.setAlignment(Qt.AlignRight)
         self.total_cost_label.setStyleSheet("font-size: 15px; font-weight: bold;")
@@ -192,35 +180,9 @@ class CartScreen(QWidget):
             if child.widget():
                 child.widget().deleteLater()
 
-    def scan_barcode_and_add_item(self, barcode):
-        """Emit a signal with the scanned barcode to be handled by the main app."""
-        self.barcode_scanned.emit(barcode)
-
-    def update_cart_totals(self):
-        """Update item count and totals in the cart and summary."""
-        count = 0
-        subtotal = 0.0
-        for i in range(self.products_layout.count()):
-            widget = self.products_layout.itemAt(i).widget()
-            if widget:
-                qty_label = widget.findChild(QLabel, 'qty_label')
-                if qty_label is None:
-                    continue  # Skip if qty_label is missing
-                price_label = widget.findChildren(QLabel)[2] if len(widget.findChildren(QLabel)) > 2 else None
-                total_label = widget.findChildren(QLabel)[3] if len(widget.findChildren(QLabel)) > 3 else None
-                qty = int(qty_label.text())
-                price = float(price_label.text().replace('£', '')) if price_label else 0.0
-                total = qty * price
-                if total_label:
-                    total_label.setText(f"£{total:.2f}")
-                count += qty
-                subtotal += total
-        self.item_count_label.setText(f"{count} Items")
-        self.summary_items_header_label.setText(f"ITEMS {count}")
-        self.subtotal_label.setText(f"£{subtotal:.2f}")
-        shipping = self.shipping_combo.currentData() or 0.0
-        total_cost = subtotal + float(shipping)
-        self.total_cost_label.setText(f"£{total_cost:.2f}")
+    def set_camera_scan_callback(self, callback):
+        """Expose the clicked event for the camera scan button."""
+        self.camera_btn.clicked.connect(callback)
 
     def _add_barcode_input(self):
         """Add a barcode input field and button for demo/testing."""
@@ -235,66 +197,54 @@ class CartScreen(QWidget):
         camera_btn.setText("Scan with Camera")
         camera_btn.setObjectName("camera_scan_button")
         camera_btn.setStyleSheet("font-size: 16px; padding: 6px 18px; border-radius: 8px; background: #eaf6ff; border: 1.5px solid #7bb1e0;")
-        camera_btn.clicked.connect(self.window().open_camera_scan_screen)
         barcode_layout.addWidget(camera_btn)
         self.camera_btn = camera_btn
         # Insert at the top of the cart panel
         cart_panel_layout = self.cart_panel.layout()
         cart_panel_layout.insertLayout(1, barcode_layout)
 
-    def open_camera_scan_screen(self):
-        from screens.camera_scan_screen import CameraScanScreen
-        self._previous_screen = self.parentWidget()
-        self.camera_screen = CameraScanScreen(self.window())
-        self.camera_screen.barcode_scanned.connect(self._on_camera_barcode_scanned)
-        self.camera_screen.back_requested.connect(self._on_camera_scan_back)
-        self.window().setCentralWidget(self.camera_screen)
-
-    def _on_camera_barcode_scanned(self, barcode):
-        self.barcode_input.setText(barcode)
-        self.scan_barcode_and_add_item(barcode)
-
     def _on_camera_scan_back(self):
         if hasattr(self, '_previous_screen') and self._previous_screen:
             self.window().setCentralWidget(self._previous_screen)
 
-    def scan_barcode_with_camera(self):
-        """Open the camera, scan for a barcode, and fill the barcode input."""
-        try:
-            from qt_client.utils.camera_barcode import scan_barcode_from_camera
-        except ImportError:
-            print("Please install opencv-python and pyzbar to use camera scanning.")
-            return
-        found_code = scan_barcode_from_camera()
-        if found_code:
-            self.barcode_input.setText(found_code)
-            self.scan_barcode_and_add_item(found_code)
-
     def showEvent(self, event):
         super().showEvent(event)
-        # Ensure barcode input is added only once
-        if not hasattr(self, '_barcode_input_added'):
-            self._add_barcode_input()
-            self._barcode_input_added = True
 
     def set_cart_products(self, products):
         """Set the products in the cart and update the UI."""
         self.clear_products_layout()
         self.product_widgets = {}
-        # Ensure the layout is attached to the correct parent
+        # Set currency from first product, or default to VND
+        # ANND: temporary for now
+        if products and 'currency' in products[0]:
+            self.currency = products[0]['currency']
+        else:
+            self.currency = "VND"
         if self.products_layout.parentWidget() is None:
             self.products_layout.setParent(self.cart_panel)
+        count = 0
+        subtotal = 0.0
         for product_data in products:
             product_widget = ProductWidget(product_data)
-            # Use partial to avoid late binding in lambda
             from functools import partial
             product_widget.plus_button.clicked.connect(partial(self.change_quantity, product_data['id'], 1))
             product_widget.minus_button.clicked.connect(partial(self.change_quantity, product_data['id'], -1))
             product_widget.remove_button.clicked.connect(partial(self.remove_product, product_data['id']))
             self.products_layout.addWidget(product_widget)
             self.product_widgets[product_data['id']] = product_widget
-        self.update_cart_totals()
-        # Force update/redraw
+        # Calculate totals using products list/dict
+        for product_data in products:
+            qty = int(product_data.get('quantity', 0))
+            price = float(str(product_data.get('price', 0)))
+            total = qty * price
+            # Update the widget's total label if available
+            product_widget = self.product_widgets.get(product_data['id'])
+            count += qty
+            subtotal += total
+        self.item_count_label.setText(f"{count} Items")
+        self.summary_items_header_label.setText(f"ITEMS {count}")
+        self.subtotal_label.setText(f"{self.currency} {subtotal:.2f}")
+        self.total_cost_label.setText(f"{self.currency} {subtotal:.2f}")
         self.cart_panel.update()
         self.cart_panel.repaint()
         self.update()

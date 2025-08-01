@@ -1,9 +1,10 @@
 FROM ghcr.io/astral-sh/uv:python3.10-bookworm
 ENV PYTHONDONTWRITEBYTECODE 1
 ENV UV_LINK_MODE=copy
-COPY ./backend /backend 
-WORKDIR /backend
+WORKDIR /app
+COPY ./backend/pyproject.toml ./backend/uv.lock /app/ 
+
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-dev
-WORKDIR /
-ENV PATH="/backend/.venv/bin:$PATH"
+COPY ./backend /app/backend 
+ENV PATH="/app/.venv/bin:$PATH"

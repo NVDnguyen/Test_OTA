@@ -4,7 +4,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: shopping-cart-backend
-    command: uvicorn backend.app:app --host 0.0.0.0 --port 5000 --reload
+    command: uvicorn backend:app --host 0.0.0.0 --port 5000 --reload
     volumes:
       - ./backend:/app/backend
     ports:

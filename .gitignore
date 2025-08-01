@@ -1,3 +1,4 @@
+.DS_Store
 # General part of the gitignore
 *.launch
 *.orig

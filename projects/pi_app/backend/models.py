@@ -11,6 +11,7 @@ class ProductBase(BaseModel):
     name: str
     subtitle: str
     price: float = Field(..., ge=0)
+    currency: str = Field(default="VND", description="Currency code, e.g. 'VND'.")
     unit: str = Field(
         default="each",
         description="The unit of measurement (e.g., 'each', 'kg', 'pack').",
@@ -43,6 +44,7 @@ class ProductUpdate(BaseModel):
     name: Optional[str] = None
     subtitle: Optional[str] = None
     price: Optional[float] = Field(default=None, ge=0)
+    currency: Optional[str] = Field(default=None, description="Currency code, e.g. 'VND'.")
     quantity: Optional[int] = Field(default=None, ge=0)
     unit: Optional[str] = None
     product_img_url: Optional[str] = None

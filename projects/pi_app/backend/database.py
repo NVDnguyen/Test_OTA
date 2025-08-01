@@ -45,9 +45,9 @@ def generate_products(n=20):
     products = []
     # Add original demo products with locations
     demo_products = [
-        {'id': 1, 'name': 'Fifa 19', 'subtitle': 'PS4', 'price': 64.00, 'quantity': 1, 'unit': 'pack', 'product_img_url': 'https://via.placeholder.com/80/cccccc/000000?Text=Game', 'location': [{"x": 100, "y": 100}]},
-        {'id': 2, 'name': 'Glacier White 500GB', 'subtitle': 'PS4', 'price': 249.99, 'quantity': 1, 'unit': 'each', 'product_img_url': 'https://via.placeholder.com/80/f0f0f0/000000?Text=Console', 'location': [{"x": 200, "y": 200}]},
-        {'id': 3, 'name': 'Platinum Headset', 'subtitle': 'PS4', 'price': 119.99, 'quantity': 1, 'unit': 'each', 'product_img_url': 'https://via.placeholder.com/80/e0e0e0/000000?Text=Accessory', 'location': [{"x": 300, "y": 300}]},
+        {'id': 1, 'name': 'Fifa 19', 'subtitle': 'PS4', 'price': 1500000, 'currency': 'VND', 'quantity': 1, 'unit': 'pack', 'product_img_url': 'https://via.placeholder.com/80/cccccc/000000?Text=Game', 'location': [{"x": 100, "y": 100}]},
+        {'id': 2, 'name': 'Glacier White 500GB', 'subtitle': 'PS4', 'price': 8000000, 'currency': 'VND', 'quantity': 1, 'unit': 'each', 'product_img_url': 'https://via.placeholder.com/80/f0f0f0/000000?Text=Console', 'location': [{"x": 200, "y": 200}]},
+        {'id': 3, 'name': 'Platinum Headset', 'subtitle': 'PS4', 'price': 2500000, 'currency': 'VND', 'quantity': 1, 'unit': 'each', 'product_img_url': 'https://via.placeholder.com/80/e0e0e0/000000?Text=Accessory', 'location': [{"x": 300, "y": 300}]},
     ]
     products.extend(demo_products)
     # Add random mock products
@@ -57,7 +57,8 @@ def generate_products(n=20):
             "id": i+100,
             "name": name,
             "subtitle": random.choice(SUBTITLES),
-            "price": round(random.uniform(1, 100), 2),
+            "price": random.randint(10000, 2000000),  # VND price range
+            "currency": "VND",
             "quantity": random.randint(1, 50),
             "unit": random.choice(UNITS),
             "product_img_url": "https://via.placeholder.com/80/cccccc/000000?Text=Product",

@@ -212,9 +212,10 @@ class MapScreen(QWidget):
             pass
 
     def show_product_details_popup(self, product):
+        currency = product.get('currency', 'VND')
         details = f"Name: {product.get('name', '')}\n"
         details += f"Subtitle: {product.get('subtitle', '')}\n"
-        details += f"Price: {product.get('price', '')} {product.get('unit', '')}\n"
+        details += f"Price: {product.get('price', '')} {currency} / {product.get('unit', '')}\n"
         details += f"Quantity: {product.get('quantity', '')}\n"
         QMessageBox.information(self, "Product Details", details)
 
@@ -266,7 +267,14 @@ class MapScreen(QWidget):
             if event.type() == event.Wheel:
                 angle = event.angleDelta().y()
                 factor = 1.25 if angle > 0 else 0.8
-                self.graphics_view.scale(factor, factor)
+                new_zoom = self.zoom_level * factor
+                # Clamp zoom between 0.5x and 3x
+                if 0.5 <= new_zoom <= 3.0:
+                    self.graphics_view.scale(factor, factor)
+                    self.zoom_level = new_zoom
+                # Center map after zoom to prevent it going out of view
+                if hasattr(self, 'pixmap_item') and self.pixmap_item:
+                    self.graphics_view.centerOn(self.pixmap_item)
                 return True
             elif event.type() == event.MouseButtonPress:
                 pos = event.pos()
@@ -297,9 +305,10 @@ class MapScreen(QWidget):
         loc = self.product_locations[idx]
         details = f"Location: ({loc.get('x', '')}, {loc.get('y', '')})\n"
         if self.product_details:
+            currency = self.product_details.get('currency', 'VND')
             details += f"Name: {self.product_details.get('name', '')}\n"
             details += f"Subtitle: {self.product_details.get('subtitle', '')}\n"
-            details += f"Price: {self.product_details.get('price', '')} {self.product_details.get('unit', '')}\n"
+            details += f"Price: {self.product_details.get('price', '')} {currency} / {self.product_details.get('unit', '')}\n"
             details += f"Quantity: {self.product_details.get('quantity', '')}\n"
         QMessageBox.information(self, "Product Location Details", details)
 
@@ -323,6 +332,15 @@ class MapScreen(QWidget):
 
     def set_api_base_url(self, api_base_url):
         self.api_base_url = api_base_url
+
+    def reset_view(self):
+        """Reset zoom and scroll position to default."""
+        self.zoom_level = 1.0
+        self.graphics_view.resetTransform()
+        if hasattr(self, 'pixmap_item') and self.pixmap_item:
+            self.graphics_view.centerOn(self.pixmap_item)
+        else:
+            self.graphics_view.centerOn(0, 0)
 
     # def showEvent(self, event):
     #     super().showEvent(event)

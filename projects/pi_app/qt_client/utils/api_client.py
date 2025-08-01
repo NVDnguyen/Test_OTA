@@ -51,7 +51,7 @@ class ApiClient(QObject):
             self.current_user_role = None
             self.token_refresh_timer.stop()
 
-    def _request(self, method, endpoint, json_data=None, headers=None, timeout=5, retry_on_refresh=True):
+    def _request(self, method, endpoint, json_data=None, headers=None, timeout=5, retry_on_refresh=True, explicit=True):
         logging.info(f"API request: {method} {endpoint} (retry_on_refresh={retry_on_refresh})")
         full_url = f"{self.base_url}{endpoint}"
         
@@ -67,7 +67,8 @@ class ApiClient(QObject):
         except requests.exceptions.HTTPError as e:
             if e.response.status_code == 401 and retry_on_refresh and self.refresh_token:
                 # Access token expired, try to refresh
-                self.token_refresh_needed.emit() # Signal to main app that refresh is happening
+                if explicit:
+                    self.token_refresh_needed.emit() # Signal to main app that refresh is happening
                 if self._refresh_access_token_internal():
                     # Retry the original request with the new token
                     headers["Authorization"] = f"Bearer {self.access_token}"
@@ -75,31 +76,33 @@ class ApiClient(QObject):
                     response.raise_for_status()
                     return response
                 else:
-                    self.api_error.emit("Failed to refresh token. Please log in again.")
+                    if explicit:
+                        self.api_error.emit("Failed to refresh token. Please log in again.")
                     self.logout()
                     raise e # Re-raise to propagate error
-            self.api_error.emit(f"API Error ({e.response.status_code}): {e.response.text}")
+            if explicit:
+                self.api_error.emit(f"API Error ({e.response.status_code}): {e.response.text}")
             raise e # Re-raise other HTTP errors
         except requests.exceptions.RequestException as e:
-            self.api_error.emit(f"Network Error: {e}")
+            if explicit:
+                self.api_error.emit(f"Network Error: {e}")
             raise e # Re-raise network errors
 
-    # Public API methods
-    def get(self, endpoint, headers=None, timeout=5, retry_on_refresh=True):
+    def get(self, endpoint, headers=None, timeout=5, retry_on_refresh=True, **kwargs):
         logging.info(f"GET {endpoint}")
-        return self._request("GET", endpoint, headers=headers, timeout=timeout, retry_on_refresh=retry_on_refresh)
+        return self._request("GET", endpoint, headers=headers, timeout=timeout, retry_on_refresh=retry_on_refresh, **kwargs)
 
-    def post(self, endpoint, json_data=None, headers=None, timeout=5, retry_on_refresh=True):
+    def post(self, endpoint, json_data=None, headers=None, timeout=5, retry_on_refresh=True, **kwargs):
         logging.info(f"POST {endpoint}")
-        return self._request("POST", endpoint, json_data=json_data, headers=headers, timeout=timeout, retry_on_refresh=retry_on_refresh)
+        return self._request("POST", endpoint, json_data=json_data, headers=headers, timeout=timeout, retry_on_refresh=retry_on_refresh, **kwargs)
 
-    def put(self, endpoint, json_data=None, headers=None, timeout=5, retry_on_refresh=True):
+    def put(self, endpoint, json_data=None, headers=None, timeout=5, retry_on_refresh=True, **kwargs):
         logging.info(f"PUT {endpoint}")
-        return self._request("PUT", endpoint, json_data=json_data, headers=headers, timeout=timeout, retry_on_refresh=retry_on_refresh)
+        return self._request("PUT", endpoint, json_data=json_data, headers=headers, timeout=timeout, retry_on_refresh=retry_on_refresh, **kwargs)
 
-    def delete(self, endpoint, headers=None, timeout=5, retry_on_refresh=True):
+    def delete(self, endpoint, headers=None, timeout=5, retry_on_refresh=True, **kwargs):
         logging.info(f"DELETE {endpoint}")
-        return self._request("DELETE", endpoint, headers=headers, timeout=timeout, retry_on_refresh=retry_on_refresh)
+        return self._request("DELETE", endpoint, headers=headers, timeout=timeout, retry_on_refresh=retry_on_refresh, **kwargs)
 
     # Authentication methods
     def login(self, email, password):

@@ -61,18 +61,16 @@ class ShoppingCartApp(QMainWindow):
 
         # Fetch data after UI elements are initialized
         self.fetch_products_from_api()
-        self.populate_cart()
 
         # --- Connect Signals to Slots (Event Handling) ---
-        self.cart_screen_page.shipping_combo.currentIndexChanged.connect(self.update_totals)
         self.cart_screen_page.set_continue_shopping_callback(self.show_home_screen)
         self.home_screen.set_map_button_callback(self.show_map_screen)
         self.home_screen.set_view_cart_callback(lambda: self.show_cart_screen(self.products_in_cart))
         self.home_screen.set_login_button_callback(self._on_login_button_clicked)
         self.cart_screen_page.set_checkout_callback(self.handle_checkout_initiation)
-        self.cart_screen_page.barcode_scanned.connect(self.handle_barcode_scanned)
         self.cart_screen_page.quantity_changed.connect(self.handle_quantity_changed)
         self.cart_screen_page.product_removed.connect(self.handle_product_removed)
+        self.cart_screen_page.set_camera_scan_callback(self.open_camera_scan_screen)
 
         # --- ApiClient Signal Handlers ---
         # Connect all relevant ApiClient signals to ShoppingCartApp slots for robust error handling and feedback
@@ -100,9 +98,6 @@ class ShoppingCartApp(QMainWindow):
 
         # We will connect product widget signals when they are created
 
-        # --- Final UI Updates ---
-        self.update_totals() # Update totals after cart is populated
-        
         # --- Setup and Start Serial Threads ---
         self.serial_thread = SerialReaderThread(
             port=settings.SERIAL_PORT,
@@ -239,50 +234,7 @@ class ShoppingCartApp(QMainWindow):
             print(f"Error fetching products from API: {e}. Using offline data.")
             self.products_in_cart = []
         self.cart_screen_page.set_cart_products(self.products_in_cart)
-
-    def populate_cart(self):
-        """Create and add product widgets to the cart layout."""
-        # Use the method from CartScreen to clear the layout
-        self.cart_screen_page.clear_products_layout()
-                 
-        for product_data in self.products_in_cart:
-            product_widget = ProductWidget(product_data)
-            
-            # Connect the buttons of this specific widget to handlers
-            product_widget.plus_button.clicked.connect(lambda _, p=product_data: self.change_quantity(p['id'], 1))
-            product_widget.minus_button.clicked.connect(lambda _, p=product_data: self.change_quantity(p['id'], -1))
-            product_widget.remove_button.clicked.connect(lambda _, p=product_data: self.remove_product(p['id']))
-            
-            self.cart_screen_page.products_layout.addWidget(product_widget)
     
-    def update_totals(self):
-        """Recalculate and display all totals."""
-        # Use Decimal for precise calculations to avoid floating point errors
-        subtotal_decimal = Decimal(0)
-        for p in self.products_in_cart:
-            # Ensure price is treated as Decimal for calculation
-            subtotal_decimal += Decimal(str(p['price'])) * Decimal(p['quantity'])
-        
-        shipping_cost_float = self.cart_screen_page.shipping_combo.currentData()
-        shipping_cost_decimal = Decimal(str(shipping_cost_float)) if shipping_cost_float is not None else Decimal(0)
-
-        total_cost_decimal = subtotal_decimal + shipping_cost_decimal
-        
-        # Convert back to float for display and payload, but the calculation was precise
-        subtotal = float(subtotal_decimal)
-        total_cost = float(total_cost_decimal)
-        item_count = sum(p['quantity'] for p in self.products_in_cart)
-        self.cart_screen_page.item_count_label.setText(f"{item_count} Items")
-        self.cart_screen_page.subtotal_label.setText(f"£{subtotal:.2f}")
-        self.cart_screen_page.total_cost_label.setText(f"£{total_cost:.2f}")
-        
-        # Also update the items count in the summary panel
-        # Access the label directly via the attribute set in ui.py
-        if hasattr(self.cart_screen_page, 'summary_items_header_label') and self.cart_screen_page.summary_items_header_label:
-            self.cart_screen_page.summary_items_header_label.setText(f"ITEMS {item_count}")
-        else:
-            print("Warning: summary_items_header_label not found in UI. Summary item count might not update.")
-
     def handle_checkout_initiation(self):
         """Gathers cart data and sends it to the backend checkout endpoint."""
         print("Checkout button clicked. Preparing data...")
@@ -290,15 +242,12 @@ class ShoppingCartApp(QMainWindow):
         subtotal_decimal = Decimal(0)
         for p in self.products_in_cart:
             subtotal_decimal += Decimal(str(p['price'])) * Decimal(p['quantity'])
-        shipping_cost_float = self.cart_screen_page.shipping_combo.currentData()
-        shipping_cost_decimal = Decimal(str(shipping_cost_float)) if shipping_cost_float is not None else Decimal(0)
-        total_cost_decimal = subtotal_decimal + shipping_cost_decimal
+        total_cost_decimal = subtotal_decimal 
         subtotal_for_payload = float(subtotal_decimal)
-        shipping_cost_for_payload = float(shipping_cost_decimal)
         total_cost_for_payload = float(total_cost_decimal)
         payload = {
             "items": self.products_in_cart,
-            "shipping_cost": shipping_cost_for_payload,
+            "shipping_cost": 0,
             "subtotal": subtotal_for_payload,
             "total_cost": total_cost_for_payload,
         }
@@ -329,7 +278,6 @@ class ShoppingCartApp(QMainWindow):
 
     def show_cart_screen(self, products):
         self.cart_screen_page.set_cart_products(products)
-        self.cart_screen_page.update_cart_totals()
         self.stacked_widget.setCurrentWidget(self.cart_screen_page)
         self.setWindowTitle("Your Cart - Shopping Application")
 
@@ -339,27 +287,28 @@ class ShoppingCartApp(QMainWindow):
 
     def show_map_screen(self):
         self.map_screen.set_api_base_url(settings.API_BASE_URL)
+        self.map_screen.reset_view()
         self.stacked_widget.setCurrentWidget(self.map_screen)
 
     def open_camera_scan_screen(self):
         self._previous_screen = self.stacked_widget.currentWidget()
         self.camera_screen = CameraScanScreen(self)
-        self.camera_screen.barcode_scanned.connect(self._on_camera_barcode_scanned)
+        self.camera_screen.barcode_scanned.connect(self.handle_barcode_scanned)
         self.camera_screen.back_requested.connect(self._on_camera_scan_back)
         self.stacked_widget.addWidget(self.camera_screen)
         self.stacked_widget.setCurrentWidget(self.camera_screen)
 
-    def _on_camera_barcode_scanned(self, barcode):
-        # Pass barcode to cart screen or wherever needed
-        self.cart_screen_page.barcode_input.setText(barcode)
-        self.cart_screen_page.scan_barcode_and_add_item(barcode)
-        self._on_camera_scan_back()
-
     def _on_camera_scan_back(self):
         if hasattr(self, '_previous_screen') and self._previous_screen:
             self.stacked_widget.setCurrentWidget(self._previous_screen)
-            self.stacked_widget.removeWidget(self.camera_screen)
+        if hasattr(self,'camera_screen'):
+            try:
+                self.stacked_widget.removeWidget(self.camera_screen)
+            except Exception as e:
+                pass
             del self.camera_screen
+        if hasattr(self.cart_screen_page,'camera_screen'):
+            del self.cart_screen_page
 
     @pyqtSlot(str)
     def append_serial_output(self, text):
@@ -462,10 +411,18 @@ class ShoppingCartApp(QMainWindow):
                 error_message="Could not fetch product for barcode. Please try again.",
                 error_title="Barcode Lookup Failed"
             ):
-                resp = self.api_client.get(f"/api/products/barcode/{barcode}")
-                if resp.status_code != 200:
-                    self.append_serial_output(f"Barcode {barcode} not found.\n")
-                    return
+                try:
+                    resp = self.api_client.get(f"/api/products/barcode/{barcode}",explicit=False)
+                except requests.exceptions.HTTPError as e:
+                    if e.response is not None and e.response.status_code == 404:
+                        logging.warning(msg="Barcode not found, showing error on camera")
+                        if hasattr(self,'camera_screen'):
+                            self.camera_screen.show_info_text(f'Product {barcode} not found!')
+                            return
+                        else:
+                            raise
+                    else:
+                        raise
                 product = resp.json()
                 # Check if already in cart
                 for p in self.products_in_cart:
@@ -476,7 +433,8 @@ class ShoppingCartApp(QMainWindow):
                     product['quantity'] = 1
                     self.products_in_cart.append(product)
                 self.cart_screen_page.set_cart_products(self.products_in_cart)
-                self.update_totals()
+                self.cart_screen_page.barcode_input.setText(barcode)
+                self._on_camera_scan_back()
         except Exception as e:
             self.append_serial_output(f"Error fetching product: {e}\n")
 
@@ -490,13 +448,11 @@ class ShoppingCartApp(QMainWindow):
                     self.products_in_cart = [p for p in self.products_in_cart if p['id'] != product_id]
                 break
         self.cart_screen_page.set_cart_products(self.products_in_cart)
-        self.update_totals()
 
     def handle_product_removed(self, product_id):
         """Handle product removed signal from CartScreen."""
         self.products_in_cart = [p for p in self.products_in_cart if p['id'] != product_id]
         self.cart_screen_page.set_cart_products(self.products_in_cart)
-        self.update_totals()
 
 if __name__ == "__main__":
     signal.signal(signal.SIGINT, signal.SIG_DFL)

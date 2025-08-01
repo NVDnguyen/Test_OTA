@@ -7,11 +7,12 @@ from pyzbar import pyzbar
 class CameraScanScreen(QWidget):
     barcode_scanned = pyqtSignal(str)
     back_requested = pyqtSignal()
-
+    
     def __init__(self, parent=None):
         super().__init__(parent)
         self.cap = None
         self.timer = None
+        self.last_barcode = None  # Track last scanned barcode
         self.init_ui()
 
     def init_ui(self):
@@ -61,13 +62,16 @@ class CameraScanScreen(QWidget):
         if not ret:
             return
         barcodes = pyzbar.decode(frame)
+        found_new = False
         for barcode in barcodes:
             barcode_data = barcode.data.decode('utf-8')
             (x, y, w, h) = barcode.rect
             cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
             cv2.putText(frame, barcode_data, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
-            self.barcode_scanned.emit(barcode_data)
-            return
+            if barcode_data != self.last_barcode:
+                self.last_barcode = barcode_data
+                self.barcode_scanned.emit(barcode_data)
+                found_new = True
         rgb_image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         h, w, ch = rgb_image.shape
         bytes_per_line = ch * w
@@ -87,6 +91,7 @@ class CameraScanScreen(QWidget):
             self.cap.release()
             self.cap = None
         self.camera_frame.clear()
+        self.last_barcode = None  # Reset last barcode
 
     def closeEvent(self, event):
         self.stop_camera()
@@ -114,3 +119,9 @@ class CameraScanScreen(QWidget):
         y = self.height() - info_size.height() - margin * 2
         y = max(margin, y)
         self.info_label.move(x, y)
+
+    def show_info_text(self, text):
+        """Show custom text in the info label, overwriting its current value."""
+        self.info_label.setText(text)
+        self.info_label.adjustSize()
+        self._update_overlay_positions()
