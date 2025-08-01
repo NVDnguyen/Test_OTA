@@ -92,8 +92,8 @@ class MapScreen(QWidget):
 
         # Home button
         self.home_button = QPushButton("🏠")
-        self.home_button.setMinimumSize(48, 48)
-        self.home_button.setMaximumSize(56, 56)
+        self.home_button.setMinimumSize(60, 60)
+        self.home_button.setMaximumSize(60, 60)
         self.home_button.setStyleSheet(
             "font-size: 26px; border-radius: 12px; border: 2px solid #bbb; "
             "background: #f5f6fa; padding: 0px;"
@@ -104,18 +104,18 @@ class MapScreen(QWidget):
         # Search bar
         self.search_bar = VirtualKeyboardLineEdit()
         self.search_bar.setPlaceholderText("🔍 Search for a product...")
-        self.search_bar.setMinimumHeight(48)
+        self.search_bar.setMinimumHeight(60)
         self.search_bar.setStyleSheet(
-            "padding: 10px; font-size: 20px; border-radius: 10px; border: 2px solid #bbb;"
+            "padding: 10px; font-size: 20px; border-radius: 8px; border: 2px solid #bbb;"
         )
         self.search_bar.textChanged.connect(self.on_search_text_changed)
         search_row.addWidget(self.search_bar)
 
         # Tracking Mode button
         self.tracking_button = QPushButton("Tracking Mode")
-        self.tracking_button.setMinimumSize(150, 48)
+        self.tracking_button.setMinimumSize(150, 60)
         self.tracking_button.setStyleSheet(
-            "font-size: 20px; border-radius: 12px; border: 2px solid #bbb; "
+            "font-size: 20px; border-radius: 8px; border: 2px solid #bbb; "
             "background: #f5f6fa; padding: 0px;"
         )
         self.tracking_button.clicked.connect(self.toggle_tracking_mode)
@@ -136,8 +136,12 @@ class MapScreen(QWidget):
         self.suggestions_list.hide()
 
         # floating
-        self.floating_bar.move(10, 10)
+        self.floating_bar.move(10, 100)
+        self.floating_bar.setMinimumHeight(65)
+        # self.floating_bar.raise_()
+        self.floating_bar.adjustSize()
         self.floating_bar.raise_()
+        # self.floating_bar.show()
         self.floating_bar.show()
 
     def load_map_image(self):
