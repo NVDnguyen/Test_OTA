@@ -7,10 +7,10 @@ import serial
 import time
 
 ANCHORS = [
-    (1600, 0),
-    (0, 1300),
     (0, 0),
-    (1600, 1300)
+    (0, 5000),
+    (5500, 5000),
+    (4750, 0)
 ]
 
 MAX_RANGE = 8000  
@@ -107,7 +107,7 @@ class UWBSerialReader:
         
         # Median filter
         self.position_history.append(pos)
-        if len(self.position_history) > 100:
+        if len(self.position_history) > 50:
             self.position_history.pop(0)
         
         return np.median(np.array(self.position_history), axis=0)

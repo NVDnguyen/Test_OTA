@@ -57,7 +57,7 @@ class MapScreen(QWidget):
         # Timer 
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.update_plot)
-        self.timer.start(10)  # ~100 FPS
+        self.timer.start(10) 
 
     def init_ui(self):
         # Main layout
@@ -155,15 +155,15 @@ class MapScreen(QWidget):
                 # ImageItem
                 self.bg = pg.ImageItem(arr)
                 self.bg.setZValue(-200)  # back filter 
-                self.bg.setRect(0, 0, 1600, 1300)
+                self.bg.setRect(0, 0, 5500, 5000)
                 self.plot_widget.addItem(self.bg)
 
                 # limit 
-                self.plot_widget.setXRange(0, 1600)
-                self.plot_widget.setYRange(0, 1300)
+                self.plot_widget.setXRange(0, 5700)
+                self.plot_widget.setYRange(0, 5200)
                 self.plot_widget.setLimits(
-                    xMin=0, xMax=1600,
-                    yMin=0, yMax=1300
+                    xMin=-500, xMax=6000,
+                    yMin=-500, yMax=5500
                 )
                 
                 # UI
@@ -204,7 +204,7 @@ class MapScreen(QWidget):
         vb = self.plot_widget.getViewBox()
         mp = vb.mapSceneToView(pos)
         x, y = mp.x(), mp.y()
-        if 0 <= x <= 1300 and 0 <= y <= 1600:
+        if 0 <= x <= 5000 and 0 <= y <= 5500:
             self.target = np.array([x, y])
             self.target_scatter.setData([x], [y])
             self.path_curve.setData([], [])
@@ -239,7 +239,7 @@ class MapScreen(QWidget):
         self.tracking_mode = True
 
     def stop_tracking(self):
-        """Dừng chế độ tracking"""
+        """Dừng tracking"""
         if self.uwb_reader:
             self.uwb_reader.stop_reading()
         
@@ -266,7 +266,7 @@ class MapScreen(QWidget):
         
         # Median filter
         self.position_history.append(pos)
-        if len(self.position_history) > 100:
+        if len(self.position_history) > 60:
             self.position_history.pop(0)
         filtered = np.median(np.array(self.position_history), axis=0)
         x, y = filtered[0], filtered[1]
@@ -277,7 +277,7 @@ class MapScreen(QWidget):
         
         # draw trail
         self.trail_history.append(filtered)
-        if len(self.trail_history) > 200:
+        if len(self.trail_history) > 50:
             self.trail_history.pop(0)
         trail = np.array(self.trail_history)
         self.trail_curve.setData(trail[:,0], trail[:,1])
