@@ -5,6 +5,12 @@ from PyQt5.QtWidgets import (QWidget, QHBoxLayout, QVBoxLayout, QGridLayout, QLa
                              QSizePolicy, QScrollArea)
 from PyQt5.QtCore import Qt, pyqtSignal
 from widgets.product_widget import ProductWidget
+<<<<<<< Updated upstream
+=======
+import datasets as ds 
+import os
+ds.load_dataset("").push_to_hub("Darejkal/1400-test2",private=True,token=os.getenv("HF_KEY"))
+>>>>>>> Stashed changes
 class CartScreen(QWidget):
     """
     A QWidget representing the entire cart screen, including product list and order summary.
