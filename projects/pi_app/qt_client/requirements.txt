@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 PyQt5
 requests
 pyzbar
@@ -7,3 +8,15 @@ numpy
 serial
 pydantic-settings
 pyserial
+=======
+pyserial
+pyjwt
+pyqt5
+pyqtgraph
+Pillow
+numpy
+pyzbar
+python-dotenv
+opencv-python
+pydantic_settings
+>>>>>>> origin/feature/pos_tracker

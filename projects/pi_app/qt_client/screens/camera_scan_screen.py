@@ -7,7 +7,6 @@ from pyzbar import pyzbar
 class CameraScanScreen(QWidget):
     barcode_scanned = pyqtSignal(str)
     back_requested = pyqtSignal()
-    
     def __init__(self, parent=None):
         super().__init__(parent)
         self.cap = None

@@ -86,7 +86,15 @@ class HomeScreen(QWidget):
         self.login_button.setMinimumHeight(36)
         self.login_button.setStyleSheet("font-size: 14px;")
         layout.addWidget(self.login_button, alignment=Qt.AlignCenter)
-
+        # RECHECK
+        # THÊM NÚT CLEAR SERIAL
+        self.clear_serial_button = QPushButton("Clear Output")
+        self.clear_serial_button.setMinimumHeight(36)
+        self.clear_serial_button.setStyleSheet("font-size: 14px;")
+        self.clear_serial_button.clicked.connect(self.clear_serial_output)
+        
+        # Thêm nút này vào layout
+        serial_send_layout.addWidget(self.clear_serial_button)
         parent.setLayout(layout)
 
     def resizeEvent(self, event):

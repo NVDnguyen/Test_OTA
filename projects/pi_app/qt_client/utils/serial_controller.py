@@ -13,75 +13,75 @@ class SerialReaderThread(QThread):
     error_occurred = pyqtSignal(str)
     finished_signal = pyqtSignal()
 
-    def __init__(self, port, baudrate, timeout=1):
-        super().__init__()
+    def __init__(self, port, baudrate, parent=None):
+        super().__init__(parent)
         self.port = port
         self.baudrate = baudrate
-        self.timeout = timeout
-        self.running = True
-        self.ser = None
-
-    def run(self):
-        while self.running:
-            try:
-                self.ser = serial.Serial(self.port, self.baudrate, timeout=self.timeout)
-                self.new_data_received.emit(f"Successfully connected to {self.port}\n")
-                while self.running:
-                    if self.ser.in_waiting > 0:
-                        line = self.ser.readline().decode('utf-8', errors='replace').rstrip()
-                        self.new_data_received.emit(line + "\n")
-                    time.sleep(0.1) # Small delay to prevent high CPU usage
-            except serial.SerialException as e:
-                self.error_occurred.emit(f"Serial Error: {e}\n")
-                time.sleep(3)  # Delay 3 seconds after error before retrying
-            finally:
-                if self.ser and self.ser.is_open:
-                    self.ser.close()
-                    self.new_data_received.emit(f"Serial port {self.port} closed.\n")
-        self.finished_signal.emit()
-
-    def stop(self):
-        self.running = False
-
-class SerialWriterThread(QThread):
-    """
-    A QThread to write data to the serial port.
-    Emits signals for success or error.
-    """
-    write_success = pyqtSignal(str)
-    error_occurred = pyqtSignal(str)
-    finished_signal = pyqtSignal()
-
-    def __init__(self, port, baudrate, timeout=1):
-        super().__init__()
-        self.port = port
-        self.baudrate = baudrate
-        self.timeout = timeout
-        self.ser = None
-        self.data_queue = []
-        self.running = True
+        self.serial = None
+        self._is_running = True
 
     def run(self):
         try:
-            self.ser = serial.Serial(self.port, self.baudrate, timeout=self.timeout)
-            while self.running:
-                if self.data_queue:
-                    data = self.data_queue.pop(0)
-                    try:
-                        self.ser.write(data.encode('utf-8'))
-                        self.write_success.emit(f"Sent: {data}")
-                    except serial.SerialException as e:
-                        self.error_occurred.emit(f"Write Error: {e}")
-                time.sleep(0.05)
-        except serial.SerialException as e:
-            self.error_occurred.emit(f"Serial Error: {e}")
+            self.serial = serial.Serial(
+                port=self.port,
+                baudrate=self.baudrate,
+                timeout=0.1
+            )
+            while self._is_running:
+                try:
+                    line = self.serial.readline().decode('utf-8', errors='replace')
+                    if line:
+                        self.new_data_received.emit(line)
+                except Exception as e:
+                    self.error_occurred.emit(str(e))
+        except Exception as e:
+            self.error_occurred.emit(f"Serial init error: {e}")
         finally:
-            if self.ser and self.ser.is_open:
-                self.ser.close()
             self.finished_signal.emit()
 
-    def send(self, data):
-        self.data_queue.append(data)
+    def stop(self):
+        self._is_running = False
+        if self.serial and self.serial.is_open:
+            self.serial.close()
+        self.wait(1000)
+
+
+class SerialWriterThread(QThread):
+    write_success = pyqtSignal(str)
+    error_occurred = pyqtSignal(str)
+
+    def __init__(self, port, baudrate, parent=None):
+        super().__init__(parent)
+        self.port = port
+        self.baudrate = baudrate
+        self.serial = None
+        self._is_running = True
+        self._message_queue = []
+
+    def run(self):
+        try:
+            self.serial = serial.Serial(
+                port=self.port,
+                baudrate=self.baudrate,
+                timeout=0.1
+            )
+            while self._is_running:
+                if self._message_queue:
+                    msg = self._message_queue.pop(0)
+                    try:
+                        self.serial.write(msg.encode())
+                        self.write_success.emit(msg)
+                    except Exception as e:
+                        self.error_occurred.emit(str(e))
+                self.msleep(50)
+        except Exception as e:
+            self.error_occurred.emit(f"Serial init error: {e}")
+
+    def send(self, message):
+        self._message_queue.append(message)
 
     def stop(self):
-        self.running = False
+        self._is_running = False
+        if self.serial and self.serial.is_open:
+            self.serial.close()
+        self.wait(1000)
