@@ -1,22 +1,11 @@
-<<<<<<< HEAD
-PyQt5
+PyQt5>=5.15.0
+pyqtgraph>=0.13.0
 requests
 pyzbar
 opencv-python
 PyJWT
 numpy
-serial
-pydantic-settings
-pyserial
-=======
-pyserial
-pyjwt
-pyqt5
-pyqtgraph
 Pillow
-numpy
-pyzbar
+pyserial
 python-dotenv
-opencv-python
-pydantic_settings
->>>>>>> origin/feature/pos_tracker
+pydantic-settings

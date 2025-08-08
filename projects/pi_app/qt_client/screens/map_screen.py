@@ -1,6 +1,13 @@
 # qt_client/screens/map_screen.py
 import sys
+import os
 import numpy as np
+
+# Set Qt platform plugin before importing PyQt5 to fix potential SIGBUS errors on macOS
+if sys.platform == 'darwin':  # macOS
+    os.environ.setdefault('QT_MAC_WANTS_LAYER', '1')
+    os.environ.setdefault('QT_LOGGING_RULES', '*.debug=false')
+
 import pyqtgraph as pg
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QLineEdit, QListWidget, QLabel, QHBoxLayout, 
@@ -51,6 +58,14 @@ class MapScreen(QWidget):
         self.target = None
         self.fps_time = time.time()
         self.tracking_mode = False  #mode
+        
+        # Initialize pyqtgraph with safe settings for macOS
+        try:
+            pg.setConfigOptions(antialias=True, useOpenGL=False)
+            pg.setConfigOption('background', 'w')
+            pg.setConfigOption('foreground', 'k')
+        except Exception as e:
+            print(f"Warning: Could not set pyqtgraph config: {e}")
         
         self.init_ui()
         
@@ -151,12 +166,22 @@ class MapScreen(QWidget):
             if resp.ok:
                 image_bytes = resp.content
                 
-                # img process
+                # img process with safety checks
                 img = Image.open(io.BytesIO(image_bytes))
-                arr = np.array(img)
+                
+                # Ensure image is in a safe format and size
+                if img.mode not in ['RGB', 'RGBA']:
+                    img = img.convert('RGB')
+                
+                # Limit image size to prevent memory issues
+                max_size = (2000, 2000)
+                if img.size[0] > max_size[0] or img.size[1] > max_size[1]:
+                    img.thumbnail(max_size, Image.Resampling.LANCZOS)
+                
+                arr = np.array(img, dtype=np.uint8)
                 arr = np.rot90(arr, k=3) 
 
-                # ImageItem
+                # ImageItem with error handling
                 self.bg = pg.ImageItem(arr)
                 self.bg.setZValue(-200)  # back filter 
                 self.bg.setRect(0, 0, 5500, 5000)
@@ -170,7 +195,7 @@ class MapScreen(QWidget):
                     yMin=-500, yMax=5500
                 )
                 
-                # UI
+                # UI elements with safer initialization
                 self.target_scatter = self.plot_widget.plot(
                     [], [], pen=None, symbol='x', symbolSize=20,
                     symbolBrush='g'
@@ -201,6 +226,9 @@ class MapScreen(QWidget):
                 self.plot_widget.scene().sigMouseClicked.connect(self.on_click)
         except Exception as e:
             print(f"Error loading map image: {e}")
+            # Create a simple fallback plot
+            self.plot_widget.setXRange(0, 5700)
+            self.plot_widget.setYRange(0, 5200)
 
     def on_click(self, ev):
         """Click to show shortest path"""

@@ -258,8 +258,7 @@ class ShoppingCartApp(QMainWindow):
             # Ensure price is treated as Decimal for calculation
             subtotal_decimal += Decimal(str(p['price'])) * Decimal(p['quantity'])
         
-        shipping_cost_float = self.cart_screen_page.shipping_combo.currentData()
-        shipping_cost_decimal = Decimal(str(shipping_cost_float)) if shipping_cost_float is not None else Decimal(0)
+        shipping_cost_decimal = Decimal(0)
 
         total_cost_decimal = subtotal_decimal + shipping_cost_decimal
         
@@ -324,7 +323,6 @@ class ShoppingCartApp(QMainWindow):
 
     def show_cart_screen(self, products):
         self.cart_screen_page.set_cart_products(products)
-        self.cart_screen_page.update_cart_totals()
         self.stacked_widget.setCurrentWidget(self.cart_screen_page)
         self.setWindowTitle("Your Cart - Shopping Application")
 
@@ -334,7 +332,12 @@ class ShoppingCartApp(QMainWindow):
 
     def show_map_screen(self):
         self.map_screen.set_api_base_url(settings.API_BASE_URL)
-        self.stacked_widget.setCurrentWidget(self.map_screen)
+        
+        try:
+            self.stacked_widget.setCurrentWidget(self.map_screen)
+        except Exception as e:
+            import traceback
+            print(traceback.format_exc())
 
     def open_camera_scan_screen(self):
         self._previous_screen = self.stacked_widget.currentWidget()
