@@ -1,3 +1,3 @@
 #!/bin/bash
 
-echo "Version  4" > /tmp/qt_client
+echo "Version  2.0.5" > /tmp/qt_client
